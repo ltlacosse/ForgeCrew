@@ -37,6 +37,21 @@ const interestOptions = [
   { id: 'brewing', name: 'Home Brewing', icon: '🍺' },
 ];
 
+// Helper function to calculate interest match score
+const calculateMatchScore = (userInterests, otherInterests) => {
+  if (!userInterests || !otherInterests) return 0;
+  const matches = userInterests.filter(i => otherInterests.includes(i));
+  return matches.length;
+};
+
+// Helper function to check location match (simple city matching for now)
+const locationsMatch = (loc1, loc2) => {
+  if (!loc1 || !loc2) return false;
+  const city1 = loc1.toLowerCase().split(',')[0].trim();
+  const city2 = loc2.toLowerCase().split(',')[0].trim();
+  return city1 === city2;
+};
+
 // Sample groups data
 const sampleGroups = [
   { 
@@ -178,6 +193,8 @@ export default function ForgeCrew() {
   
   // App state
   const [joinedCrews, setJoinedCrews] = useState([]);
+  const [nearbyUsers, setNearbyUsers] = useState([]);
+  const [loadingNearby, setLoadingNearby] = useState(false);
 
   // Check for existing session on load
   useEffect(() => {
@@ -218,6 +235,8 @@ export default function ForgeCrew() {
       if (data) {
         setProfile(data);
         setCurrentScreen('home');
+        // Fetch nearby users after profile loads
+        fetchNearbyUsers(data);
       } else {
         // No profile yet, need onboarding
         setCurrentScreen('onboarding-name');
@@ -225,6 +244,52 @@ export default function ForgeCrew() {
     } catch (error) {
       // Profile doesn't exist yet
       setCurrentScreen('onboarding-name');
+    }
+  };
+
+  // Fetch users with matching location and interests
+  const fetchNearbyUsers = async (currentProfile) => {
+    if (!currentProfile) return;
+    setLoadingNearby(true);
+    
+    try {
+      // Get all profiles except current user
+      const { data: allUsers, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', currentProfile.id);
+      
+      if (error) throw error;
+      
+      if (allUsers && allUsers.length > 0) {
+        // Score and sort users by match quality
+        const scoredUsers = allUsers.map(otherUser => {
+          const locationMatch = locationsMatch(currentProfile.location, otherUser.location);
+          const interestScore = calculateMatchScore(currentProfile.interests, otherUser.interests);
+          const sharedInterests = currentProfile.interests?.filter(i => 
+            otherUser.interests?.includes(i)
+          ) || [];
+          
+          return {
+            ...otherUser,
+            locationMatch,
+            interestScore,
+            sharedInterests,
+            totalScore: (locationMatch ? 10 : 0) + interestScore
+          };
+        });
+        
+        // Sort by total score (highest first) and filter out zero matches
+        const sortedUsers = scoredUsers
+          .filter(u => u.totalScore > 0)
+          .sort((a, b) => b.totalScore - a.totalScore);
+        
+        setNearbyUsers(sortedUsers);
+      }
+    } catch (error) {
+      console.error('Error fetching nearby users:', error);
+    } finally {
+      setLoadingNearby(false);
     }
   };
 
@@ -848,6 +913,113 @@ export default function ForgeCrew() {
                 </div>
               </div>
             ))}
+            
+            {/* People Near You Section */}
+            <div style={{ padding: '0 20px', marginTop: '32px', marginBottom: '16px' }}>
+              <span style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                letterSpacing: '2px',
+                textTransform: 'uppercase',
+                color: colors.gold,
+              }}>
+                People Near You
+              </span>
+            </div>
+            
+            {loadingNearby ? (
+              <div style={{ padding: '20px', textAlign: 'center' }}>
+                <p style={{ color: colors.textMuted, fontSize: '14px' }}>Finding people nearby...</p>
+              </div>
+            ) : nearbyUsers.length > 0 ? (
+              nearbyUsers.map(person => (
+                <div 
+                  key={person.id}
+                  className="card"
+                  style={{ margin: '0 20px 12px', padding: '16px', cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '50px',
+                      height: '50px',
+                      borderRadius: '50%',
+                      background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '20px',
+                      fontWeight: '600',
+                      color: colors.text,
+                    }}>
+                      {person.name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{
+                        fontFamily: '"Playfair Display", Georgia, serif',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        color: '#f4e8d9',
+                        marginBottom: '4px',
+                      }}>
+                        {person.name}
+                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        {person.locationMatch && (
+                          <span style={{ 
+                            fontSize: '11px', 
+                            color: colors.accent,
+                            background: 'rgba(45, 74, 62, 0.2)',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                          }}>
+                            📍 {person.location}
+                          </span>
+                        )}
+                        {person.sharedInterests?.slice(0, 2).map(interestId => {
+                          const interest = interestOptions.find(i => i.id === interestId);
+                          return interest ? (
+                            <span key={interestId} style={{ 
+                              fontSize: '11px', 
+                              color: colors.textMuted,
+                              background: 'rgba(184, 134, 80, 0.1)',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                            }}>
+                              {interest.icon} {interest.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.gold,
+                      background: 'rgba(212, 175, 55, 0.1)',
+                      padding: '4px 8px',
+                      borderRadius: '8px',
+                    }}>
+                      {person.interestScore} match{person.interestScore !== 1 ? 'es' : ''}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ 
+                margin: '0 20px', 
+                padding: '24px', 
+                textAlign: 'center',
+                background: 'rgba(255,255,255,0.02)',
+                borderRadius: '12px',
+                border: `1px solid ${colors.border}`,
+              }}>
+                <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '8px' }}>
+                  No matches yet in your area
+                </p>
+                <p style={{ color: colors.textDark, fontSize: '13px' }}>
+                  Invite friends to join ForgeCrew!
+                </p>
+              </div>
+            )}
           </div>
           
           <BottomNav active="home" onNavigate={setCurrentScreen} />
