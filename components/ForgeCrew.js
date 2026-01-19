@@ -233,6 +233,13 @@ export default function ForgeCrew() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [locationError, setLocationError] = useState('');
   
+  // Photo and social state
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [instagram, setInstagram] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  
   // App state
   const [joinedCrews, setJoinedCrews] = useState([]);
   const [nearbyUsers, setNearbyUsers] = useState([]);
@@ -745,8 +752,32 @@ export default function ForgeCrew() {
   // Save Profile
   const saveProfile = async () => {
     if (!user) return;
+    setUploadingPhoto(true);
 
     try {
+      let photoUrl = null;
+      
+      // Upload photo if provided
+      if (photoFile) {
+        const fileExt = photoFile.name.split('.').pop();
+        const fileName = `${user.id}/avatar.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(fileName, photoFile, { upsert: true });
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+        
+        photoUrl = publicUrl;
+      }
+      
+      // Check if verified (has photo AND at least one social link)
+      const isVerified = !!(photoUrl && (instagram || linkedin));
+      
       const { error } = await supabase
         .from('profiles')
         .upsert({
@@ -758,6 +789,10 @@ export default function ForgeCrew() {
           latitude: userLatitude,
           longitude: userLongitude,
           radius_miles: radiusMiles,
+          photo_url: photoUrl,
+          instagram: instagram || null,
+          linkedin: linkedin || null,
+          is_verified: isVerified,
           updated_at: new Date().toISOString(),
         });
 
@@ -783,12 +818,31 @@ export default function ForgeCrew() {
         latitude: userLatitude,
         longitude: userLongitude,
         radius_miles: radiusMiles,
+        photo_url: photoUrl,
+        instagram: instagram,
+        linkedin: linkedin,
+        is_verified: isVerified,
       });
       
       setCurrentScreen('home');
     } catch (error) {
       console.error('Error saving profile:', error);
       alert('Error saving profile. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Handle photo selection
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -1253,6 +1307,7 @@ export default function ForgeCrew() {
               <div style={{ width: '8px', height: '8px', borderRadius: '4px', background: colors.borderLight }} />
               <div style={{ width: '8px', height: '8px', borderRadius: '4px', background: colors.borderLight }} />
               <div style={{ width: '24px', height: '8px', borderRadius: '4px', background: colors.gold }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '4px', background: colors.borderLight }} />
             </div>
             <h2 style={{
               fontFamily: '"Playfair Display", Georgia, serif',
@@ -1293,10 +1348,168 @@ export default function ForgeCrew() {
             <button 
               className="btn-primary"
               style={{ width: '100%', opacity: selectedInterests.length ? 1 : 0.5 }}
-              onClick={saveProfile}
+              onClick={() => selectedInterests.length && setCurrentScreen('onboarding-photo')}
               disabled={!selectedInterests.length}
             >
-              Find My Crews
+              Continue
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ONBOARDING - PHOTO & VERIFICATION
+  if (currentScreen === 'onboarding-photo') {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          <div style={{ padding: '40px 24px', minHeight: '100vh' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginBottom: '40px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '4px', background: colors.borderLight }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '4px', background: colors.borderLight }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '4px', background: colors.borderLight }} />
+              <div style={{ width: '24px', height: '8px', borderRadius: '4px', background: colors.gold }} />
+            </div>
+            <h2 style={{
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontSize: '28px',
+              fontWeight: '600',
+              marginBottom: '12px',
+              color: '#f4e8d9',
+            }}>
+              Verify your profile
+            </h2>
+            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '32px' }}>
+              Add a photo and social link to get verified. This helps build trust in the community.
+            </p>
+            
+            {/* Photo Upload */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: colors.gold, 
+                letterSpacing: '1px', 
+                textTransform: 'uppercase',
+                marginBottom: '12px' 
+              }}>
+                Profile Photo
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '50%',
+                  background: photoPreview 
+                    ? `url(${photoPreview}) center/cover`
+                    : `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '32px',
+                  color: colors.text,
+                  border: `2px solid ${colors.border}`,
+                }}>
+                  {!photoPreview && '📷'}
+                </div>
+                <label style={{
+                  padding: '12px 20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  color: colors.text,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontFamily: '"Cormorant Garamond", Georgia, serif',
+                }}>
+                  {photoPreview ? 'Change Photo' : 'Upload Photo'}
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+            </div>
+            
+            {/* Social Links */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: colors.gold, 
+                letterSpacing: '1px', 
+                textTransform: 'uppercase',
+                marginBottom: '12px' 
+              }}>
+                Social Links (at least one for verification)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '20px' }}>📸</span>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Instagram username"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value.replace('@', ''))}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '20px' }}>💼</span>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="LinkedIn profile URL"
+                  value={linkedin}
+                  onChange={(e) => setLinkedin(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+            
+            {/* Verification badge preview */}
+            {photoPreview && (instagram || linkedin) && (
+              <div style={{
+                padding: '16px',
+                background: 'rgba(45, 74, 62, 0.2)',
+                border: '1px solid rgba(45, 74, 62, 0.4)',
+                borderRadius: '8px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+              }}>
+                <span style={{ fontSize: '24px' }}>✓</span>
+                <div>
+                  <p style={{ color: colors.text, fontSize: '14px', fontWeight: '600' }}>
+                    You'll be verified!
+                  </p>
+                  <p style={{ color: colors.textMuted, fontSize: '13px' }}>
+                    Other members will see a verified badge on your profile.
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <button 
+              className="btn-primary"
+              style={{ width: '100%', opacity: uploadingPhoto ? 0.7 : 1 }}
+              onClick={saveProfile}
+              disabled={uploadingPhoto}
+            >
+              {uploadingPhoto ? 'Saving...' : 'Find My Crews'}
+            </button>
+            
+            <button 
+              className="btn-secondary"
+              style={{ width: '100%', marginTop: '12px' }}
+              onClick={saveProfile}
+              disabled={uploadingPhoto}
+            >
+              Skip for now
             </button>
           </div>
         </div>
@@ -1614,17 +1827,20 @@ export default function ForgeCrew() {
                       width: '50px',
                       height: '50px',
                       borderRadius: '50%',
-                      background: friendStatus === 'friends' 
-                        ? `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`
-                        : `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
+                      background: person.photo_url 
+                        ? `url(${person.photo_url}) center/cover`
+                        : friendStatus === 'friends' 
+                          ? `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`
+                          : `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '20px',
                       fontWeight: '600',
                       color: friendStatus === 'friends' ? colors.bg : colors.text,
+                      border: person.is_verified ? `2px solid ${colors.gold}` : 'none',
                     }}>
-                      {person.name?.[0]?.toUpperCase() || '?'}
+                      {!person.photo_url && (person.name?.[0]?.toUpperCase() || '?')}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -1636,8 +1852,17 @@ export default function ForgeCrew() {
                         }}>
                           {person.name}
                         </h3>
+                        {person.is_verified && (
+                          <span style={{ 
+                            fontSize: '11px', 
+                            color: colors.gold,
+                            background: 'rgba(212, 175, 55, 0.15)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                          }}>✓ Verified</span>
+                        )}
                         {friendStatus === 'friends' && (
-                          <span style={{ fontSize: '12px', color: colors.gold }}>✓ Friends</span>
+                          <span style={{ fontSize: '12px', color: colors.gold }}>• Friends</span>
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
