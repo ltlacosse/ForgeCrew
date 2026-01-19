@@ -270,6 +270,13 @@ export default function ForgeCrew() {
   const [friends, setFriends] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [sentRequests, setSentRequests] = useState([]);
+  
+  // Block/Report state
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportingUser, setReportingUser] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDescription, setReportDescription] = useState('');
 
   // Check for existing session on load
   useEffect(() => {
@@ -318,6 +325,8 @@ export default function ForgeCrew() {
         fetchCrews(userId, data);
         // Fetch events
         fetchEvents(userId);
+        // Fetch blocked users
+        fetchBlockedUsers(userId);
       } else {
         // No profile yet, need onboarding
         setCurrentScreen('onboarding-name');
@@ -378,9 +387,9 @@ export default function ForgeCrew() {
           };
         });
         
-        // Sort by total score (highest first) and filter out zero matches
+        // Sort by total score (highest first) and filter out zero matches and blocked users
         const sortedUsers = scoredUsers
-          .filter(u => u.totalScore > 0)
+          .filter(u => u.totalScore > 0 && !blockedUsers.includes(u.id))
           .sort((a, b) => b.totalScore - a.totalScore);
         
         setNearbyUsers(sortedUsers);
@@ -852,6 +861,98 @@ export default function ForgeCrew() {
     } catch (error) {
       console.error('Error canceling RSVP:', error);
     }
+  };
+
+  // Fetch blocked users
+  const fetchBlockedUsers = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('blocks')
+        .select('blocked_id')
+        .eq('blocker_id', userId);
+      
+      if (error) throw error;
+      
+      setBlockedUsers(data?.map(b => b.blocked_id) || []);
+    } catch (error) {
+      console.error('Error fetching blocked users:', error);
+    }
+  };
+
+  // Block a user
+  const blockUser = async (blockedId) => {
+    if (!user) return;
+    
+    try {
+      await supabase
+        .from('blocks')
+        .insert({
+          blocker_id: user.id,
+          blocked_id: blockedId
+        });
+      
+      // Also remove any friendship
+      await supabase
+        .from('friends')
+        .delete()
+        .or(`and(requester_id.eq.${user.id},recipient_id.eq.${blockedId}),and(requester_id.eq.${blockedId},recipient_id.eq.${user.id})`);
+      
+      setBlockedUsers(prev => [...prev, blockedId]);
+      // Refresh nearby users to hide blocked user
+      fetchNearbyUsers(profile);
+      fetchFriends(user.id);
+    } catch (error) {
+      console.error('Error blocking user:', error);
+    }
+  };
+
+  // Unblock a user
+  const unblockUser = async (blockedId) => {
+    if (!user) return;
+    
+    try {
+      await supabase
+        .from('blocks')
+        .delete()
+        .eq('blocker_id', user.id)
+        .eq('blocked_id', blockedId);
+      
+      setBlockedUsers(prev => prev.filter(id => id !== blockedId));
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+    }
+  };
+
+  // Report a user
+  const reportUser = async () => {
+    if (!user || !reportingUser || !reportReason) return;
+    
+    try {
+      await supabase
+        .from('reports')
+        .insert({
+          reporter_id: user.id,
+          reported_id: reportingUser.id,
+          reason: reportReason,
+          description: reportDescription
+        });
+      
+      // Reset and close modal
+      setShowReportModal(false);
+      setReportingUser(null);
+      setReportReason('');
+      setReportDescription('');
+      
+      alert('Report submitted. Thank you for helping keep ForgeCrew safe.');
+    } catch (error) {
+      console.error('Error reporting user:', error);
+      alert('Error submitting report. Please try again.');
+    }
+  };
+
+  // Check if user is blocked
+  const isUserBlocked = (userId) => {
+    return blockedUsers.includes(userId);
   };
 
   // Sign Up
@@ -2371,48 +2472,68 @@ export default function ForgeCrew() {
                         })}
                       </div>
                     </div>
-                    {/* Friend action button */}
-                    {friendStatus === 'none' && (
-                      <button
-                        onClick={() => sendFriendRequest(person.id)}
-                        style={{
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                      {/* Friend action button */}
+                      {friendStatus === 'none' && (
+                        <button
+                          onClick={() => sendFriendRequest(person.id)}
+                          style={{
+                            padding: '8px 12px',
+                            background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: colors.bg,
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            fontFamily: '"Cormorant Garamond", Georgia, serif',
+                          }}
+                        >
+                          + Add
+                        </button>
+                      )}
+                      {friendStatus === 'pending_sent' && (
+                        <span style={{
                           padding: '8px 12px',
-                          background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
-                          border: 'none',
+                          background: 'rgba(255,255,255,0.05)',
+                          border: `1px solid ${colors.border}`,
                           borderRadius: '6px',
-                          color: colors.bg,
+                          color: colors.textMuted,
                           fontSize: '11px',
-                          fontWeight: '600',
+                        }}>
+                          Pending
+                        </span>
+                      )}
+                      {friendStatus === 'friends' && (
+                        <span style={{
+                          fontSize: '11px',
+                          color: colors.gold,
+                          background: 'rgba(212, 175, 55, 0.1)',
+                          padding: '4px 8px',
+                          borderRadius: '8px',
+                        }}>
+                          {person.interestScore} match{person.interestScore !== 1 ? 'es' : ''}
+                        </span>
+                      )}
+                      {/* Report/Block button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReportingUser(person);
+                          setShowReportModal(true);
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: colors.textDark,
+                          fontSize: '16px',
                           cursor: 'pointer',
-                          fontFamily: '"Cormorant Garamond", Georgia, serif',
+                          padding: '4px',
                         }}
                       >
-                        + Add
+                        ⋯
                       </button>
-                    )}
-                    {friendStatus === 'pending_sent' && (
-                      <span style={{
-                        padding: '8px 12px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${colors.border}`,
-                        borderRadius: '6px',
-                        color: colors.textMuted,
-                        fontSize: '11px',
-                      }}>
-                        Pending
-                      </span>
-                    )}
-                    {friendStatus === 'friends' && (
-                      <span style={{
-                        fontSize: '11px',
-                        color: colors.gold,
-                        background: 'rgba(212, 175, 55, 0.1)',
-                        padding: '4px 8px',
-                        borderRadius: '8px',
-                      }}>
-                        {person.interestScore} match{person.interestScore !== 1 ? 'es' : ''}
-                      </span>
-                    )}
+                    </div>
                   </div>
                 </div>
               )})
@@ -2861,6 +2982,160 @@ export default function ForgeCrew() {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Report/Block Modal */}
+          {showReportModal && reportingUser && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200,
+              padding: '20px',
+            }}>
+              <div style={{
+                background: colors.bgLight,
+                borderRadius: '16px',
+                padding: '24px',
+                width: '100%',
+                maxWidth: '360px',
+                border: `1px solid ${colors.border}`,
+              }}>
+                <h2 style={{
+                  fontFamily: '"Playfair Display", Georgia, serif',
+                  fontSize: '20px',
+                  color: '#f4e8d9',
+                  marginBottom: '8px',
+                }}>
+                  {reportingUser.name}
+                </h2>
+                <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '20px' }}>
+                  What would you like to do?
+                </p>
+                
+                {/* Block Button */}
+                <button
+                  onClick={() => {
+                    if (confirm(`Block ${reportingUser.name}? They won't be able to see you or contact you.`)) {
+                      blockUser(reportingUser.id);
+                      setShowReportModal(false);
+                      setReportingUser(null);
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    marginBottom: '12px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    color: colors.text,
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
+                  }}
+                >
+                  🚫 Block this person
+                  <p style={{ fontSize: '12px', color: colors.textMuted, marginTop: '4px' }}>
+                    They won't see you or be able to contact you
+                  </p>
+                </button>
+                
+                {/* Report Section */}
+                <div style={{
+                  padding: '14px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  marginBottom: '12px',
+                }}>
+                  <p style={{ color: colors.text, fontSize: '15px', marginBottom: '12px' }}>
+                    🚩 Report this person
+                  </p>
+                  <select
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      marginBottom: '12px',
+                      background: 'rgba(255, 255, 255, 0.03)',
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '6px',
+                      color: reportReason ? colors.text : colors.textDark,
+                      fontSize: '14px',
+                      fontFamily: '"Cormorant Garamond", Georgia, serif',
+                    }}
+                  >
+                    <option value="">Select reason</option>
+                    <option value="harassment">Harassment or bullying</option>
+                    <option value="fake">Fake profile</option>
+                    <option value="inappropriate">Inappropriate content</option>
+                    <option value="spam">Spam or scam</option>
+                    <option value="other">Other</option>
+                  </select>
+                  
+                  {reportReason && (
+                    <>
+                      <textarea
+                        placeholder="Add details (optional)"
+                        value={reportDescription}
+                        onChange={(e) => setReportDescription(e.target.value)}
+                        rows={3}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          marginBottom: '12px',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: '6px',
+                          color: colors.text,
+                          fontSize: '14px',
+                          resize: 'none',
+                          fontFamily: '"Cormorant Garamond", Georgia, serif',
+                        }}
+                      />
+                      <button
+                        onClick={reportUser}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          background: 'rgba(231, 76, 60, 0.2)',
+                          border: '1px solid rgba(231, 76, 60, 0.4)',
+                          borderRadius: '6px',
+                          color: '#e74c3c',
+                          fontSize: '14px',
+                          cursor: 'pointer',
+                          fontFamily: '"Cormorant Garamond", Georgia, serif',
+                        }}
+                      >
+                        Submit Report
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowReportModal(false);
+                    setReportingUser(null);
+                    setReportReason('');
+                    setReportDescription('');
+                  }}
+                  style={{ width: '100%' }}
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}
