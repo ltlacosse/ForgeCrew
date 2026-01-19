@@ -239,6 +239,15 @@ export default function ForgeCrew() {
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [suggestedCrews, setSuggestedCrews] = useState([]);
   
+  // Real crews state
+  const [realCrews, setRealCrews] = useState([]);
+  const [myCrews, setMyCrews] = useState([]);
+  const [showCreateCrew, setShowCreateCrew] = useState(false);
+  const [newCrewName, setNewCrewName] = useState('');
+  const [newCrewDescription, setNewCrewDescription] = useState('');
+  const [newCrewCategory, setNewCrewCategory] = useState('');
+  const [selectedCrew, setSelectedCrew] = useState(null);
+  
   // Friends state
   const [friends, setFriends] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -287,6 +296,8 @@ export default function ForgeCrew() {
         fetchNearbyUsers(data);
         // Fetch friends data
         fetchFriends(userId);
+        // Fetch crews
+        fetchCrews(userId, data);
       } else {
         // No profile yet, need onboarding
         setCurrentScreen('onboarding-name');
@@ -524,6 +535,144 @@ export default function ForgeCrew() {
     if (sentRequests.includes(otherUserId)) return 'pending_sent';
     if (pendingRequests.find(r => r.requester_id === otherUserId)) return 'pending_received';
     return 'none';
+  };
+
+  // Fetch all crews and user's memberships
+  const fetchCrews = async (userId, currentProfile) => {
+    try {
+      // Fetch all public crews
+      const { data: crews, error: crewsError } = await supabase
+        .from('crews')
+        .select('*')
+        .eq('is_public', true);
+      
+      if (crewsError) throw crewsError;
+      
+      // Fetch user's crew memberships
+      const { data: memberships, error: memberError } = await supabase
+        .from('crew_members')
+        .select('crew_id')
+        .eq('user_id', userId);
+      
+      if (memberError) throw memberError;
+      
+      const memberCrewIds = memberships?.map(m => m.crew_id) || [];
+      
+      // Add member count and membership status to each crew
+      if (crews) {
+        const crewsWithData = await Promise.all(crews.map(async (crew) => {
+          const { count } = await supabase
+            .from('crew_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('crew_id', crew.id);
+          
+          // Calculate distance if GPS available
+          let distance = null;
+          if (currentProfile?.latitude && currentProfile?.longitude && crew.latitude && crew.longitude) {
+            distance = calculateDistance(
+              currentProfile.latitude, currentProfile.longitude,
+              crew.latitude, crew.longitude
+            );
+          }
+          
+          return {
+            ...crew,
+            memberCount: count || 0,
+            isMember: memberCrewIds.includes(crew.id),
+            distance
+          };
+        }));
+        
+        setRealCrews(crewsWithData);
+        setMyCrews(crewsWithData.filter(c => c.isMember));
+      }
+    } catch (error) {
+      console.error('Error fetching crews:', error);
+    }
+  };
+
+  // Create a new crew
+  const createCrew = async () => {
+    if (!user || !newCrewName || !newCrewCategory) return;
+    
+    try {
+      const { data: crew, error } = await supabase
+        .from('crews')
+        .insert({
+          name: newCrewName,
+          description: newCrewDescription,
+          category: newCrewCategory,
+          creator_id: user.id,
+          location: profile?.location,
+          latitude: profile?.latitude,
+          longitude: profile?.longitude,
+          is_public: true
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Auto-join the crew as creator
+      await supabase
+        .from('crew_members')
+        .insert({
+          crew_id: crew.id,
+          user_id: user.id,
+          role: 'creator'
+        });
+      
+      // Reset form and refresh
+      setNewCrewName('');
+      setNewCrewDescription('');
+      setNewCrewCategory('');
+      setShowCreateCrew(false);
+      fetchCrews(user.id, profile);
+    } catch (error) {
+      console.error('Error creating crew:', error);
+      alert('Error creating crew. Please try again.');
+    }
+  };
+
+  // Join a crew
+  const joinCrew = async (crewId) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('crew_members')
+        .insert({
+          crew_id: crewId,
+          user_id: user.id,
+          role: 'member'
+        });
+      
+      if (error) throw error;
+      
+      fetchCrews(user.id, profile);
+    } catch (error) {
+      console.error('Error joining crew:', error);
+    }
+  };
+
+  // Leave a crew
+  const leaveCrew = async (crewId) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('crew_members')
+        .delete()
+        .eq('crew_id', crewId)
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      setSelectedCrew(null);
+      fetchCrews(user.id, profile);
+    } catch (error) {
+      console.error('Error leaving crew:', error);
+    }
   };
 
   // Sign Up
@@ -1247,6 +1396,11 @@ export default function ForgeCrew() {
                   {suggestedCrews.slice(0, 4).map(suggestion => (
                     <div 
                       key={suggestion.id}
+                      onClick={() => {
+                        setNewCrewName(suggestion.name);
+                        setNewCrewCategory(suggestion.category);
+                        setShowCreateCrew(true);
+                      }}
                       style={{
                         minWidth: '200px',
                         padding: '20px',
@@ -1313,59 +1467,121 @@ export default function ForgeCrew() {
               </>
             )}
             
-            {/* Crews section */}
-            <div style={{ padding: '0 20px', marginBottom: '16px' }}>
-              <span style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                letterSpacing: '2px',
-                textTransform: 'uppercase',
-                color: colors.gold,
-              }}>
-                Recommended Crews
-              </span>
-            </div>
-            
-            {sampleGroups.map(group => (
-              <div 
-                key={group.id}
-                className="card"
-                style={{ margin: '0 20px 16px', padding: '20px', cursor: 'pointer' }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <h3 style={{
-                        fontFamily: '"Playfair Display", Georgia, serif',
-                        fontSize: '18px',
-                        fontWeight: '600',
-                        color: '#f4e8d9',
-                      }}>
-                        {group.name}
-                      </h3>
-                      {group.verified && <span style={{ color: colors.gold }}>✓</span>}
-                      {group.featured && <span>⭐</span>}
-                    </div>
-                    <p style={{ fontSize: '12px', color: colors.gold, letterSpacing: '1px', textTransform: 'uppercase' }}>
-                      {group.category}
-                    </p>
-                  </div>
+            {/* My Crews Section */}
+            {myCrews.length > 0 && (
+              <>
+                <div style={{ padding: '0 20px', marginBottom: '16px' }}>
                   <span style={{
-                    fontSize: '13px',
-                    color: colors.textMuted,
-                    background: 'rgba(184, 134, 80, 0.1)',
-                    padding: '4px 10px',
-                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    letterSpacing: '2px',
+                    textTransform: 'uppercase',
+                    color: colors.gold,
                   }}>
-                    {group.members} members
+                    My Crews
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: colors.textMuted }}>
-                  <span>📍 {group.location}</span>
-                  <span>📅 {group.nextEvent}</span>
+                
+                {myCrews.map(crew => (
+                  <div 
+                    key={crew.id}
+                    className="card"
+                    onClick={() => setSelectedCrew(crew)}
+                    style={{ margin: '0 20px 12px', padding: '16px', cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{
+                          fontFamily: '"Playfair Display", Georgia, serif',
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: '#f4e8d9',
+                          marginBottom: '4px',
+                        }}>
+                          {crew.name}
+                        </h3>
+                        <p style={{ fontSize: '12px', color: colors.gold, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                          {crew.category}
+                        </p>
+                      </div>
+                      <span style={{
+                        fontSize: '12px',
+                        color: colors.textMuted,
+                        background: 'rgba(45, 74, 62, 0.2)',
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                      }}>
+                        {crew.memberCount} members
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Nearby Crews Section */}
+            {realCrews.filter(c => !c.isMember).length > 0 && (
+              <>
+                <div style={{ padding: '0 20px', marginBottom: '16px', marginTop: '24px' }}>
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    letterSpacing: '2px',
+                    textTransform: 'uppercase',
+                    color: colors.gold,
+                  }}>
+                    Crews Near You
+                  </span>
                 </div>
-              </div>
-            ))}
+                
+                {realCrews.filter(c => !c.isMember).map(crew => (
+                  <div 
+                    key={crew.id}
+                    className="card"
+                    style={{ margin: '0 20px 12px', padding: '16px' }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <h3 style={{
+                          fontFamily: '"Playfair Display", Georgia, serif',
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: '#f4e8d9',
+                          marginBottom: '4px',
+                        }}>
+                          {crew.name}
+                        </h3>
+                        <p style={{ fontSize: '12px', color: colors.gold, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>
+                          {crew.category}
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: colors.textMuted }}>
+                          <span>👥 {crew.memberCount} members</span>
+                          {crew.distance && <span>📍 {crew.distance} mi</span>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => joinCrew(crew.id)}
+                        style={{
+                          padding: '8px 16px',
+                          background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: colors.bg,
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontFamily: '"Cormorant Garamond", Georgia, serif',
+                        }}
+                      >
+                        Join
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Crews section */}
             
             {/* People Near You Section */}
             <div style={{ padding: '0 20px', marginTop: '32px', marginBottom: '16px' }}>
@@ -1515,6 +1731,187 @@ export default function ForgeCrew() {
               </div>
             )}
           </div>
+          
+          {/* Create Crew Modal */}
+          {showCreateCrew && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200,
+              padding: '20px',
+            }}>
+              <div style={{
+                background: colors.bgLight,
+                borderRadius: '16px',
+                padding: '24px',
+                width: '100%',
+                maxWidth: '360px',
+                border: `1px solid ${colors.border}`,
+              }}>
+                <h2 style={{
+                  fontFamily: '"Playfair Display", Georgia, serif',
+                  fontSize: '24px',
+                  color: '#f4e8d9',
+                  marginBottom: '20px',
+                }}>
+                  Create a Crew
+                </h2>
+                
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Crew name"
+                  value={newCrewName}
+                  onChange={(e) => setNewCrewName(e.target.value)}
+                  style={{ marginBottom: '12px' }}
+                />
+                
+                <select
+                  value={newCrewCategory}
+                  onChange={(e) => setNewCrewCategory(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    color: newCrewCategory ? colors.text : colors.textDark,
+                    fontSize: '16px',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
+                  }}
+                >
+                  <option value="">Select category</option>
+                  {interestOptions.map(opt => (
+                    <option key={opt.id} value={opt.name}>{opt.icon} {opt.name}</option>
+                  ))}
+                </select>
+                
+                <textarea
+                  className="input"
+                  placeholder="Description (optional)"
+                  value={newCrewDescription}
+                  onChange={(e) => setNewCrewDescription(e.target.value)}
+                  rows={3}
+                  style={{ marginBottom: '20px', resize: 'none' }}
+                />
+                
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      setShowCreateCrew(false);
+                      setNewCrewName('');
+                      setNewCrewDescription('');
+                      setNewCrewCategory('');
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={createCrew}
+                    disabled={!newCrewName || !newCrewCategory}
+                    style={{ flex: 1, opacity: (!newCrewName || !newCrewCategory) ? 0.5 : 1 }}
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Crew Detail Modal */}
+          {selectedCrew && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200,
+              padding: '20px',
+            }}>
+              <div style={{
+                background: colors.bgLight,
+                borderRadius: '16px',
+                padding: '24px',
+                width: '100%',
+                maxWidth: '360px',
+                border: `1px solid ${colors.border}`,
+              }}>
+                <h2 style={{
+                  fontFamily: '"Playfair Display", Georgia, serif',
+                  fontSize: '24px',
+                  color: '#f4e8d9',
+                  marginBottom: '8px',
+                }}>
+                  {selectedCrew.name}
+                </h2>
+                <p style={{ fontSize: '12px', color: colors.gold, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '16px' }}>
+                  {selectedCrew.category}
+                </p>
+                
+                {selectedCrew.description && (
+                  <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '16px' }}>
+                    {selectedCrew.description}
+                  </p>
+                )}
+                
+                <div style={{ 
+                  padding: '12px', 
+                  background: 'rgba(255,255,255,0.03)', 
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: colors.textMuted, fontSize: '14px' }}>
+                    <span>👥 {selectedCrew.memberCount} members</span>
+                    {selectedCrew.location && <span>📍 {selectedCrew.location}</span>}
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setSelectedCrew(null)}
+                    style={{ flex: 1 }}
+                  >
+                    Close
+                  </button>
+                  {selectedCrew.isMember && (
+                    <button
+                      onClick={() => leaveCrew(selectedCrew.id)}
+                      style={{
+                        flex: 1,
+                        padding: '14px 28px',
+                        background: 'rgba(231, 76, 60, 0.2)',
+                        border: '1px solid rgba(231, 76, 60, 0.4)',
+                        borderRadius: '6px',
+                        color: '#e74c3c',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        fontFamily: '"Cormorant Garamond", Georgia, serif',
+                      }}
+                    >
+                      Leave Crew
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           
           <BottomNav active="home" onNavigate={setCurrentScreen} pendingCount={pendingRequests.length} />
         </div>
