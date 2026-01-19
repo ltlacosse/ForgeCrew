@@ -125,7 +125,7 @@ const contentStyle = {
 };
 
 // Bottom Navigation Component
-const BottomNav = ({ active, onNavigate }) => (
+const BottomNav = ({ active, onNavigate, pendingCount = 0 }) => (
   <div style={{
     position: 'fixed',
     bottom: 0,
@@ -160,9 +160,32 @@ const BottomNav = ({ active, onNavigate }) => (
           background: 'none',
           border: 'none',
           fontFamily: '"Cormorant Garamond", Georgia, serif',
+          position: 'relative',
         }}
       >
-        <span style={{ fontSize: '22px' }}>{item.icon}</span>
+        <span style={{ fontSize: '22px', position: 'relative' }}>
+          {item.icon}
+          {item.id === 'profile' && pendingCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '-8px',
+              background: '#e74c3c',
+              color: 'white',
+              fontSize: '10px',
+              fontWeight: '700',
+              minWidth: '16px',
+              height: '16px',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: 'system-ui, sans-serif',
+            }}>
+              {pendingCount}
+            </span>
+          )}
+        </span>
         <span style={{ fontSize: '10px', letterSpacing: '1px', textTransform: 'uppercase' }}>{item.label}</span>
       </button>
     ))}
@@ -1320,7 +1343,7 @@ export default function ForgeCrew() {
             )}
           </div>
           
-          <BottomNav active="home" onNavigate={setCurrentScreen} />
+          <BottomNav active="home" onNavigate={setCurrentScreen} pendingCount={pendingRequests.length} />
         </div>
       </div>
     );
@@ -1376,7 +1399,7 @@ export default function ForgeCrew() {
             </div>
           </div>
           
-          <BottomNav active="explore" onNavigate={setCurrentScreen} />
+          <BottomNav active="explore" onNavigate={setCurrentScreen} pendingCount={pendingRequests.length} />
         </div>
       </div>
     );
@@ -1414,7 +1437,7 @@ export default function ForgeCrew() {
             </div>
           </div>
           
-          <BottomNav active="messages" onNavigate={setCurrentScreen} />
+          <BottomNav active="messages" onNavigate={setCurrentScreen} pendingCount={pendingRequests.length} />
         </div>
       </div>
     );
@@ -1643,7 +1666,7 @@ export default function ForgeCrew() {
             </div>
           </div>
           
-          <BottomNav active="profile" onNavigate={setCurrentScreen} />
+          <BottomNav active="profile" onNavigate={setCurrentScreen} pendingCount={pendingRequests.length} />
         </div>
       </div>
     );
