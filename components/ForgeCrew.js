@@ -2238,6 +2238,229 @@ export default function ForgeCrew() {
     );
   }
 
+  // EDIT PROFILE SCREEN
+  if (currentScreen === 'edit-profile') {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          <div style={{ padding: '40px 24px', minHeight: '100vh' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px' }}>
+              <button
+                onClick={() => setCurrentScreen('profile')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.gold,
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '0',
+                  marginRight: '16px',
+                }}
+              >
+                ←
+              </button>
+              <h2 style={{
+                fontFamily: '"Playfair Display", Georgia, serif',
+                fontSize: '24px',
+                fontWeight: '600',
+                color: '#f4e8d9',
+              }}>
+                Get Verified
+              </h2>
+            </div>
+            
+            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '32px' }}>
+              Add a photo and social link to verify your profile. This helps build trust in the community.
+            </p>
+            
+            {/* Photo Upload */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: colors.gold, 
+                letterSpacing: '1px', 
+                textTransform: 'uppercase',
+                marginBottom: '12px' 
+              }}>
+                Profile Photo
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '50%',
+                  background: photoPreview || profile?.photo_url
+                    ? `url(${photoPreview || profile?.photo_url}) center/cover`
+                    : `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '32px',
+                  color: colors.text,
+                  border: `2px solid ${colors.border}`,
+                }}>
+                  {!photoPreview && !profile?.photo_url && '📷'}
+                </div>
+                <label style={{
+                  padding: '12px 20px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '8px',
+                  color: colors.text,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontFamily: '"Cormorant Garamond", Georgia, serif',
+                }}>
+                  {photoPreview || profile?.photo_url ? 'Change Photo' : 'Upload Photo'}
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handlePhotoSelect}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+            </div>
+            
+            {/* Social Links */}
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{ 
+                display: 'block', 
+                fontSize: '12px', 
+                color: colors.gold, 
+                letterSpacing: '1px', 
+                textTransform: 'uppercase',
+                marginBottom: '12px' 
+              }}>
+                Social Links (at least one for verification)
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <span style={{ fontSize: '20px' }}>📸</span>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Instagram username"
+                  value={instagram || profile?.instagram || ''}
+                  onChange={(e) => setInstagram(e.target.value.replace('@', ''))}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '20px' }}>💼</span>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="LinkedIn profile URL"
+                  value={linkedin || profile?.linkedin || ''}
+                  onChange={(e) => setLinkedin(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+              </div>
+            </div>
+            
+            {/* Verification preview */}
+            {(photoPreview || profile?.photo_url) && (instagram || linkedin || profile?.instagram || profile?.linkedin) && (
+              <div style={{
+                padding: '16px',
+                background: 'rgba(45, 74, 62, 0.2)',
+                border: '1px solid rgba(45, 74, 62, 0.4)',
+                borderRadius: '8px',
+                marginBottom: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+              }}>
+                <span style={{ fontSize: '24px' }}>✓</span>
+                <div>
+                  <p style={{ color: colors.text, fontSize: '14px', fontWeight: '600' }}>
+                    You'll be verified!
+                  </p>
+                  <p style={{ color: colors.textMuted, fontSize: '13px' }}>
+                    Save to get your verified badge.
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <button 
+              className="btn-primary"
+              style={{ width: '100%', opacity: uploadingPhoto ? 0.7 : 1 }}
+              onClick={async () => {
+                if (!user) return;
+                setUploadingPhoto(true);
+                
+                try {
+                  let photoUrl = profile?.photo_url;
+                  
+                  if (photoFile) {
+                    const fileExt = photoFile.name.split('.').pop();
+                    const fileName = `${user.id}/avatar.${fileExt}`;
+                    
+                    const { error: uploadError } = await supabase.storage
+                      .from('avatars')
+                      .upload(fileName, photoFile, { upsert: true });
+                    
+                    if (uploadError) throw uploadError;
+                    
+                    const { data: { publicUrl } } = supabase.storage
+                      .from('avatars')
+                      .getPublicUrl(fileName);
+                    
+                    photoUrl = publicUrl;
+                  }
+                  
+                  const finalInstagram = instagram || profile?.instagram || null;
+                  const finalLinkedin = linkedin || profile?.linkedin || null;
+                  const isVerified = !!(photoUrl && (finalInstagram || finalLinkedin));
+                  
+                  const { error } = await supabase
+                    .from('profiles')
+                    .update({
+                      photo_url: photoUrl,
+                      instagram: finalInstagram,
+                      linkedin: finalLinkedin,
+                      is_verified: isVerified,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq('id', user.id);
+                  
+                  if (error) throw error;
+                  
+                  setProfile({
+                    ...profile,
+                    photo_url: photoUrl,
+                    instagram: finalInstagram,
+                    linkedin: finalLinkedin,
+                    is_verified: isVerified,
+                  });
+                  
+                  setCurrentScreen('profile');
+                } catch (error) {
+                  console.error('Error updating profile:', error);
+                  alert('Error updating profile. Please try again.');
+                } finally {
+                  setUploadingPhoto(false);
+                }
+              }}
+              disabled={uploadingPhoto}
+            >
+              {uploadingPhoto ? 'Saving...' : 'Save & Get Verified'}
+            </button>
+            
+            <button 
+              className="btn-secondary"
+              style={{ width: '100%', marginTop: '12px' }}
+              onClick={() => setCurrentScreen('profile')}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // PROFILE SCREEN
   if (currentScreen === 'profile') {
     return (
@@ -2253,7 +2476,9 @@ export default function ForgeCrew() {
                 width: '100px',
                 height: '100px',
                 borderRadius: '50%',
-                background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                background: profile?.photo_url 
+                  ? `url(${profile.photo_url}) center/cover`
+                  : `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -2261,17 +2486,28 @@ export default function ForgeCrew() {
                 fontWeight: '600',
                 color: colors.bg,
                 margin: '0 auto 16px',
+                border: profile?.is_verified ? `3px solid ${colors.gold}` : 'none',
               }}>
-                {profile?.name?.[0]?.toUpperCase() || 'U'}
+                {!profile?.photo_url && (profile?.name?.[0]?.toUpperCase() || 'U')}
               </div>
-              <h1 style={{
-                fontFamily: '"Playfair Display", Georgia, serif',
-                fontSize: '28px',
-                color: '#f4e8d9',
-                marginBottom: '4px',
-              }}>
-                {profile?.name || 'User'}
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '4px' }}>
+                <h1 style={{
+                  fontFamily: '"Playfair Display", Georgia, serif',
+                  fontSize: '28px',
+                  color: '#f4e8d9',
+                }}>
+                  {profile?.name || 'User'}
+                </h1>
+                {profile?.is_verified && (
+                  <span style={{ 
+                    fontSize: '12px', 
+                    color: colors.gold,
+                    background: 'rgba(212, 175, 55, 0.15)',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                  }}>✓ Verified</span>
+                )}
+              </div>
               <p style={{ color: colors.textMuted, fontSize: '14px' }}>
                 {profile?.email}
               </p>
@@ -2279,6 +2515,52 @@ export default function ForgeCrew() {
                 <p style={{ color: colors.textMuted, fontSize: '14px', marginTop: '4px' }}>
                   📍 {profile.location}
                 </p>
+              )}
+              
+              {/* Social Links */}
+              {(profile?.instagram || profile?.linkedin) && (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '12px' }}>
+                  {profile.instagram && (
+                    <a 
+                      href={`https://instagram.com/${profile.instagram}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: colors.textMuted, fontSize: '14px', textDecoration: 'none' }}
+                    >
+                      📸 @{profile.instagram}
+                    </a>
+                  )}
+                  {profile.linkedin && (
+                    <a 
+                      href={profile.linkedin.startsWith('http') ? profile.linkedin : `https://${profile.linkedin}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: colors.textMuted, fontSize: '14px', textDecoration: 'none' }}
+                    >
+                      💼 LinkedIn
+                    </a>
+                  )}
+                </div>
+              )}
+              
+              {/* Edit Profile / Get Verified Button */}
+              {!profile?.is_verified && (
+                <button
+                  onClick={() => setCurrentScreen('edit-profile')}
+                  style={{
+                    marginTop: '16px',
+                    padding: '10px 20px',
+                    background: 'rgba(212, 175, 55, 0.15)',
+                    border: `1px solid ${colors.gold}`,
+                    borderRadius: '20px',
+                    color: colors.gold,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
+                  }}
+                >
+                  ✓ Get Verified
+                </button>
               )}
             </div>
             
