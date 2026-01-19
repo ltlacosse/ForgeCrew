@@ -1,21 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 // Color constants - Refined palette
 const colors = {
   bg: '#141211',
   bgLight: '#1c1a17',
   bgCard: 'rgba(35, 32, 28, 0.9)',
-  gold: '#d4af37',           // True gold - more refined
-  goldLight: '#e5c76b',      // Brighter gold for highlights
-  goldDark: '#a68a2a',       // Deeper gold for gradients
-  accent: '#2d4a3e',         // Deep forest green - poker table feel
-  accentLight: '#3d6352',    // Lighter green for hover states
-  burgundy: '#722f37',       // Deep red - cigar lounge accent
-  text: '#f0ebe3',           // Slightly warmer white
-  textMuted: '#a69f93',      // Warmer muted text
-  textDark: '#6b655c',       // Darker muted text
+  gold: '#d4af37',
+  goldLight: '#e5c76b',
+  goldDark: '#a68a2a',
+  accent: '#2d4a3e',
+  accentLight: '#3d6352',
+  burgundy: '#722f37',
+  text: '#f0ebe3',
+  textMuted: '#a69f93',
+  textDark: '#6b655c',
   border: 'rgba(212, 175, 55, 0.12)',
   borderLight: 'rgba(212, 175, 55, 0.25)',
 };
@@ -207,7 +208,7 @@ const BottomNav = ({ active, onNavigate }) => (
           cursor: 'pointer',
           background: 'none',
           border: 'none',
-          fontFamily: '"Crimson Pro", Georgia, serif',
+          fontFamily: '"Cormorant Garamond", Georgia, serif',
         }}
       >
         <span style={{ fontSize: '22px' }}>{item.icon}</span>
@@ -236,6 +237,13 @@ export default function ForgeCrew() {
     { id: 3, user: 'Dave K.', text: "Nice. I'll handle the whiskey.", time: '3:05 PM', avatar: 'D' },
   ]);
   const [newMessage, setNewMessage] = useState('');
+  
+  // Waitlist signup state
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistLocation, setWaitlistLocation] = useState('');
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+  const [waitlistError, setWaitlistError] = useState('');
 
   const groups = initialGroups;
   const notifications = initialNotifications;
@@ -265,6 +273,40 @@ export default function ForgeCrew() {
     } else if (!joinedCrews.includes(groupId)) {
       setJoinedCrews([...joinedCrews, groupId]);
     }
+  };
+
+  // Waitlist signup function
+  const handleWaitlistSignup = async (e) => {
+    e.preventDefault();
+    setWaitlistSubmitting(true);
+    setWaitlistError('');
+    
+    try {
+      const { error } = await supabase
+        .from('waitlist')
+        .insert([
+          { 
+            email: waitlistEmail,
+            name: userName || null,
+            location: waitlistLocation || null,
+            interests: selectedInterests.length > 0 ? selectedInterests : null,
+          }
+        ]);
+      
+      if (error) {
+        if (error.code === '23505') {
+          setWaitlistError('This email is already on the waitlist!');
+        } else {
+          setWaitlistError('Something went wrong. Please try again.');
+        }
+      } else {
+        setWaitlistSuccess(true);
+      }
+    } catch (err) {
+      setWaitlistError('Something went wrong. Please try again.');
+    }
+    
+    setWaitlistSubmitting(false);
   };
 
   // Container style used across screens
@@ -490,7 +532,7 @@ export default function ForgeCrew() {
     </div>
   );
 
-  // SPLASH SCREEN
+  // SPLASH SCREEN WITH WAITLIST SIGNUP
   if (currentScreen === 'splash') {
     return (
       <div style={containerStyle}>
@@ -534,24 +576,108 @@ export default function ForgeCrew() {
               color: colors.textMuted,
               letterSpacing: '4px',
               textTransform: 'uppercase',
-              marginBottom: '60px',
+              marginBottom: '40px',
             }}>Brotherhood Built</p>
-            <div style={{
-              width: '120px',
-              height: '1px',
-              background: `linear-gradient(90deg, transparent, ${colors.gold}, transparent)`,
-              margin: '0 auto 60px',
-            }} />
-            <button className="btn-primary" onClick={() => setCurrentScreen('onboarding-name')}>
-              Get Started
-            </button>
-            <button 
-              className="btn-secondary" 
-              style={{ marginTop: '16px' }}
-              onClick={() => { setUserName('Mike'); setCurrentScreen('home'); }}
-            >
-              I Have an Account
-            </button>
+            
+            {/* Waitlist Signup Form */}
+            {!waitlistSuccess ? (
+              <div style={{ width: '100%', maxWidth: '320px' }}>
+                <p style={{
+                  fontSize: '15px',
+                  color: colors.text,
+                  marginBottom: '24px',
+                  lineHeight: '1.6',
+                }}>
+                  Join the waitlist to get early access when we launch in your area.
+                </p>
+                
+                <form onSubmit={handleWaitlistSignup}>
+                  <input
+                    className="input"
+                    style={{ marginBottom: '12px' }}
+                    type="email"
+                    placeholder="Your email"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    required
+                  />
+                  <input
+                    className="input"
+                    style={{ marginBottom: '16px' }}
+                    type="text"
+                    placeholder="Your city (optional)"
+                    value={waitlistLocation}
+                    onChange={(e) => setWaitlistLocation(e.target.value)}
+                  />
+                  
+                  {waitlistError && (
+                    <p style={{ 
+                      color: '#e74c3c', 
+                      fontSize: '14px', 
+                      marginBottom: '16px',
+                      padding: '10px',
+                      background: 'rgba(231, 76, 60, 0.1)',
+                      borderRadius: '6px',
+                    }}>
+                      {waitlistError}
+                    </p>
+                  )}
+                  
+                  <button 
+                    className="btn-primary"
+                    style={{ width: '100%', opacity: waitlistSubmitting ? 0.7 : 1 }}
+                    type="submit"
+                    disabled={waitlistSubmitting}
+                  >
+                    {waitlistSubmitting ? 'Joining...' : 'Join the Waitlist'}
+                  </button>
+                </form>
+                
+                <div style={{
+                  width: '120px',
+                  height: '1px',
+                  background: `linear-gradient(90deg, transparent, ${colors.gold}, transparent)`,
+                  margin: '32px auto',
+                }} />
+                
+                <button 
+                  className="btn-secondary"
+                  style={{ width: '100%' }}
+                  onClick={() => setCurrentScreen('onboarding-name')}
+                >
+                  Preview the App
+                </button>
+              </div>
+            ) : (
+              <div style={{ width: '100%', maxWidth: '320px' }}>
+                <div style={{
+                  background: `linear-gradient(135deg, ${colors.accent} 0%, #1f332b 100%)`,
+                  border: `1px solid rgba(45, 74, 62, 0.5)`,
+                  borderRadius: '12px',
+                  padding: '24px',
+                  marginBottom: '24px',
+                }}>
+                  <div style={{ fontSize: '32px', marginBottom: '12px' }}>✓</div>
+                  <h3 style={{
+                    fontFamily: '"Playfair Display", Georgia, serif',
+                    fontSize: '20px',
+                    color: '#f0ebe3',
+                    marginBottom: '8px',
+                  }}>You're on the list!</h3>
+                  <p style={{ fontSize: '14px', color: '#a8c5b8', lineHeight: '1.6' }}>
+                    We'll notify you when ForgeCrew launches in your area. In the meantime, check out what's coming.
+                  </p>
+                </div>
+                
+                <button 
+                  className="btn-primary"
+                  style={{ width: '100%' }}
+                  onClick={() => setCurrentScreen('onboarding-name')}
+                >
+                  Preview the App
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -774,7 +900,7 @@ export default function ForgeCrew() {
                     gap: '12px',
                     marginBottom: '12px',
                     cursor: 'pointer',
-                    fontFamily: '"Crimson Pro", Georgia, serif',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
                   }}
                 >
                   <span style={{ fontSize: '20px' }}>⚜</span>
@@ -803,7 +929,7 @@ export default function ForgeCrew() {
                   gap: '12px',
                   marginBottom: '12px',
                   cursor: 'pointer',
-                  fontFamily: '"Crimson Pro", Georgia, serif',
+                  fontFamily: '"Cormorant Garamond", Georgia, serif',
                 }}>
                   <span style={{ fontSize: '20px' }}>{item.icon}</span>
                   <div style={{ textAlign: 'left', flex: 1 }}>
@@ -982,7 +1108,7 @@ export default function ForgeCrew() {
                 cursor: 'pointer',
                 background: 'none',
                 border: 'none',
-                fontFamily: '"Crimson Pro", Georgia, serif',
+                fontFamily: '"Cormorant Garamond", Georgia, serif',
               }}
               onClick={() => setCurrentScreen('home')}
             >
@@ -1116,7 +1242,7 @@ export default function ForgeCrew() {
                     cursor: 'pointer',
                     background: 'none',
                     border: 'none',
-                    fontFamily: '"Crimson Pro", Georgia, serif',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
                   }}
                 >{tab}</button>
               ))}
@@ -1184,7 +1310,7 @@ export default function ForgeCrew() {
                       fontSize: '12px',
                       color: colors.textMuted,
                       cursor: 'pointer',
-                      fontFamily: '"Crimson Pro", Georgia, serif',
+                      fontFamily: '"Cormorant Garamond", Georgia, serif',
                     }}>Message</button>
                   </div>
                 ))}
