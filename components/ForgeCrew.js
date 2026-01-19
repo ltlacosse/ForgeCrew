@@ -1215,28 +1215,16 @@ export default function ForgeCrew() {
             padding: '40px 30px',
             textAlign: 'center',
           }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '40px',
-              marginBottom: '20px',
-            }}>🔥</div>
-            <h1 style={{
-              fontFamily: '"Playfair Display", Georgia, serif',
-              fontSize: '42px',
-              fontWeight: '700',
-              letterSpacing: '3px',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              background: 'linear-gradient(180deg, #f5f0e6 0%, #d4af37 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}>ForgeCrew</h1>
+            <img 
+              src="/logo-full.png" 
+              alt="ForgeCrew" 
+              style={{
+                width: '180px',
+                height: '180px',
+                marginBottom: '30px',
+                borderRadius: '24px',
+              }}
+            />
             <p style={{
               fontSize: '16px',
               color: colors.textMuted,
@@ -2094,13 +2082,24 @@ export default function ForgeCrew() {
               background: `linear-gradient(180deg, rgba(30, 25, 21, 1) 0%, rgba(30, 25, 21, 0) 100%)`,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div style={{
-                  fontFamily: '"Playfair Display", Georgia, serif',
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  color: colors.goldLight,
-                }}>
-                  ForgeCrew
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <img 
+                    src="/logo-icon.png" 
+                    alt="ForgeCrew" 
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                    }}
+                  />
+                  <span style={{
+                    fontFamily: '"Playfair Display", Georgia, serif',
+                    fontSize: '22px',
+                    fontWeight: '700',
+                    color: colors.goldLight,
+                  }}>
+                    ForgeCrew
+                  </span>
                 </div>
                 <div 
                   onClick={() => setCurrentScreen('profile')}
@@ -2108,7 +2107,9 @@ export default function ForgeCrew() {
                     width: '40px',
                     height: '40px',
                     borderRadius: '50%',
-                    background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                    background: profile?.photo_url 
+                      ? `url(${profile.photo_url}) center/cover`
+                      : `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2116,9 +2117,10 @@ export default function ForgeCrew() {
                     fontWeight: '600',
                     color: colors.bg,
                     cursor: 'pointer',
+                    border: profile?.is_verified ? `2px solid ${colors.gold}` : 'none',
                   }}
                 >
-                  {profile?.name?.[0]?.toUpperCase() || 'U'}
+                  {!profile?.photo_url && (profile?.name?.[0]?.toUpperCase() || 'U')}
                 </div>
               </div>
               <p style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '4px' }}>Welcome back,</p>
