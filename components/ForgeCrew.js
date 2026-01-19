@@ -195,6 +195,7 @@ export default function ForgeCrew() {
   const [joinedCrews, setJoinedCrews] = useState([]);
   const [nearbyUsers, setNearbyUsers] = useState([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
+  const [suggestedCrews, setSuggestedCrews] = useState([]);
 
   // Check for existing session on load
   useEffect(() => {
@@ -285,12 +286,56 @@ export default function ForgeCrew() {
           .sort((a, b) => b.totalScore - a.totalScore);
         
         setNearbyUsers(sortedUsers);
+        
+        // Generate suggested crews based on shared interests
+        generateSuggestedCrews(currentProfile, allUsers);
+      } else {
+        // No other users yet, but still generate suggestions based on user's interests
+        generateSuggestedCrews(currentProfile, []);
       }
     } catch (error) {
       console.error('Error fetching nearby users:', error);
     } finally {
       setLoadingNearby(false);
     }
+  };
+
+  // Generate crew suggestions based on interest overlap
+  const generateSuggestedCrews = (currentProfile, allUsers) => {
+    if (!currentProfile?.interests) return;
+    
+    const suggestions = [];
+    
+    // For each of the user's interests, count how many nearby people share it
+    currentProfile.interests.forEach(interestId => {
+      const interest = interestOptions.find(i => i.id === interestId);
+      if (!interest) return;
+      
+      // Find users in same location with this interest
+      const matchingUsers = allUsers.filter(u => 
+        locationsMatch(currentProfile.location, u.location) && 
+        u.interests?.includes(interestId)
+      );
+      
+      // Get city name for the crew suggestion
+      const city = currentProfile.location?.split(',')[0]?.trim() || 'Local';
+      
+      suggestions.push({
+        id: interestId,
+        interest: interest,
+        interestId: interestId,
+        name: `${city} ${interest.name}`,
+        icon: interest.icon,
+        matchCount: matchingUsers.length,
+        matchingUsers: matchingUsers.slice(0, 5), // Show up to 5 matching users
+        category: interest.name,
+      });
+    });
+    
+    // Sort by match count (most matches first)
+    suggestions.sort((a, b) => b.matchCount - a.matchCount);
+    
+    setSuggestedCrews(suggestions);
   };
 
   // Sign Up
@@ -858,6 +903,98 @@ export default function ForgeCrew() {
                 <span>📍</span>
                 <span style={{ color: colors.text, fontSize: '14px' }}>{profile.location}</span>
               </div>
+            )}
+            
+            {/* Suggested Crews Section */}
+            {suggestedCrews.length > 0 && (
+              <>
+                <div style={{ padding: '0 20px', marginBottom: '16px' }}>
+                  <span style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    letterSpacing: '2px',
+                    textTransform: 'uppercase',
+                    color: colors.gold,
+                  }}>
+                    Start a Crew
+                  </span>
+                </div>
+                
+                <div style={{ 
+                  display: 'flex', 
+                  overflowX: 'auto', 
+                  padding: '0 20px 20px',
+                  gap: '12px',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                }}>
+                  {suggestedCrews.slice(0, 4).map(suggestion => (
+                    <div 
+                      key={suggestion.id}
+                      style={{
+                        minWidth: '200px',
+                        padding: '20px',
+                        background: suggestion.matchCount > 0 
+                          ? 'linear-gradient(135deg, rgba(45, 74, 62, 0.3) 0%, rgba(45, 74, 62, 0.1) 100%)'
+                          : 'rgba(255,255,255,0.02)',
+                        border: suggestion.matchCount > 0 
+                          ? '1px solid rgba(45, 74, 62, 0.4)'
+                          : `1px solid ${colors.border}`,
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <div style={{ fontSize: '32px', marginBottom: '12px' }}>{suggestion.icon}</div>
+                      <h3 style={{
+                        fontFamily: '"Playfair Display", Georgia, serif',
+                        fontSize: '16px',
+                        fontWeight: '600',
+                        color: '#f4e8d9',
+                        marginBottom: '8px',
+                      }}>
+                        {suggestion.name}
+                      </h3>
+                      {suggestion.matchCount > 0 ? (
+                        <p style={{ 
+                          fontSize: '13px', 
+                          color: colors.accentLight,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}>
+                          <span style={{ fontSize: '16px' }}>👥</span>
+                          {suggestion.matchCount} {suggestion.matchCount === 1 ? 'person' : 'people'} nearby
+                        </p>
+                      ) : (
+                        <p style={{ fontSize: '13px', color: colors.textMuted }}>
+                          Be the first to start this crew
+                        </p>
+                      )}
+                      <button style={{
+                        marginTop: '12px',
+                        padding: '8px 16px',
+                        background: suggestion.matchCount > 0 
+                          ? `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`
+                          : 'transparent',
+                        border: suggestion.matchCount > 0 
+                          ? 'none'
+                          : `1px solid ${colors.borderLight}`,
+                        borderRadius: '6px',
+                        color: suggestion.matchCount > 0 ? colors.bg : colors.textMuted,
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        cursor: 'pointer',
+                        fontFamily: '"Cormorant Garamond", Georgia, serif',
+                      }}>
+                        {suggestion.matchCount > 0 ? 'Start Crew' : 'Create'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
             
             {/* Crews section */}
