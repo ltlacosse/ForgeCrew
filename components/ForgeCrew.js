@@ -196,6 +196,11 @@ export default function ForgeCrew() {
   const [nearbyUsers, setNearbyUsers] = useState([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [suggestedCrews, setSuggestedCrews] = useState([]);
+  
+  // Friends state
+  const [friends, setFriends] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
+  const [sentRequests, setSentRequests] = useState([]);
 
   // Check for existing session on load
   useEffect(() => {
@@ -238,6 +243,8 @@ export default function ForgeCrew() {
         setCurrentScreen('home');
         // Fetch nearby users after profile loads
         fetchNearbyUsers(data);
+        // Fetch friends data
+        fetchFriends(userId);
       } else {
         // No profile yet, need onboarding
         setCurrentScreen('onboarding-name');
@@ -336,6 +343,119 @@ export default function ForgeCrew() {
     suggestions.sort((a, b) => b.matchCount - a.matchCount);
     
     setSuggestedCrews(suggestions);
+  };
+
+  // Fetch friends and friend requests
+  const fetchFriends = async (userId) => {
+    try {
+      // Get all friendships involving this user
+      const { data: friendships, error } = await supabase
+        .from('friends')
+        .select('*')
+        .or(`requester_id.eq.${userId},recipient_id.eq.${userId}`);
+      
+      if (error) throw error;
+      
+      if (friendships) {
+        // Separate into categories
+        const accepted = [];
+        const pending = [];
+        const sent = [];
+        
+        for (const f of friendships) {
+          if (f.status === 'accepted') {
+            // Get the other person's ID
+            const friendId = f.requester_id === userId ? f.recipient_id : f.requester_id;
+            accepted.push(friendId);
+          } else if (f.status === 'pending') {
+            if (f.recipient_id === userId) {
+              // Someone sent us a request
+              pending.push(f);
+            } else {
+              // We sent a request
+              sent.push(f.recipient_id);
+            }
+          }
+        }
+        
+        setFriends(accepted);
+        setPendingRequests(pending);
+        setSentRequests(sent);
+      }
+    } catch (error) {
+      console.error('Error fetching friends:', error);
+    }
+  };
+
+  // Send friend request
+  const sendFriendRequest = async (recipientId) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('friends')
+        .insert({
+          requester_id: user.id,
+          recipient_id: recipientId,
+          status: 'pending'
+        });
+      
+      if (error) throw error;
+      
+      // Update local state
+      setSentRequests(prev => [...prev, recipientId]);
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+    }
+  };
+
+  // Accept friend request
+  const acceptFriendRequest = async (requesterId) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('friends')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('requester_id', requesterId)
+        .eq('recipient_id', user.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setPendingRequests(prev => prev.filter(r => r.requester_id !== requesterId));
+      setFriends(prev => [...prev, requesterId]);
+    } catch (error) {
+      console.error('Error accepting friend request:', error);
+    }
+  };
+
+  // Decline friend request
+  const declineFriendRequest = async (requesterId) => {
+    if (!user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('friends')
+        .delete()
+        .eq('requester_id', requesterId)
+        .eq('recipient_id', user.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setPendingRequests(prev => prev.filter(r => r.requester_id !== requesterId));
+    } catch (error) {
+      console.error('Error declining friend request:', error);
+    }
+  };
+
+  // Check friendship status with a user
+  const getFriendshipStatus = (otherUserId) => {
+    if (friends.includes(otherUserId)) return 'friends';
+    if (sentRequests.includes(otherUserId)) return 'pending_sent';
+    if (pendingRequests.find(r => r.requester_id === otherUserId)) return 'pending_received';
+    return 'none';
   };
 
   // Sign Up
@@ -1069,37 +1189,45 @@ export default function ForgeCrew() {
                 <p style={{ color: colors.textMuted, fontSize: '14px' }}>Finding people nearby...</p>
               </div>
             ) : nearbyUsers.length > 0 ? (
-              nearbyUsers.map(person => (
+              nearbyUsers.map(person => {
+                const friendStatus = getFriendshipStatus(person.id);
+                return (
                 <div 
                   key={person.id}
                   className="card"
-                  style={{ margin: '0 20px 12px', padding: '16px', cursor: 'pointer' }}
+                  style={{ margin: '0 20px 12px', padding: '16px' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
                       width: '50px',
                       height: '50px',
                       borderRadius: '50%',
-                      background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
+                      background: friendStatus === 'friends' 
+                        ? `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`
+                        : `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '20px',
                       fontWeight: '600',
-                      color: colors.text,
+                      color: friendStatus === 'friends' ? colors.bg : colors.text,
                     }}>
                       {person.name?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <h3 style={{
-                        fontFamily: '"Playfair Display", Georgia, serif',
-                        fontSize: '16px',
-                        fontWeight: '600',
-                        color: '#f4e8d9',
-                        marginBottom: '4px',
-                      }}>
-                        {person.name}
-                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <h3 style={{
+                          fontFamily: '"Playfair Display", Georgia, serif',
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: '#f4e8d9',
+                        }}>
+                          {person.name}
+                        </h3>
+                        {friendStatus === 'friends' && (
+                          <span style={{ fontSize: '12px', color: colors.gold }}>✓ Friends</span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         {person.locationMatch && (
                           <span style={{ 
@@ -1128,18 +1256,51 @@ export default function ForgeCrew() {
                         })}
                       </div>
                     </div>
-                    <div style={{
-                      fontSize: '11px',
-                      color: colors.gold,
-                      background: 'rgba(212, 175, 55, 0.1)',
-                      padding: '4px 8px',
-                      borderRadius: '8px',
-                    }}>
-                      {person.interestScore} match{person.interestScore !== 1 ? 'es' : ''}
-                    </div>
+                    {/* Friend action button */}
+                    {friendStatus === 'none' && (
+                      <button
+                        onClick={() => sendFriendRequest(person.id)}
+                        style={{
+                          padding: '8px 12px',
+                          background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: colors.bg,
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          fontFamily: '"Cormorant Garamond", Georgia, serif',
+                        }}
+                      >
+                        + Add
+                      </button>
+                    )}
+                    {friendStatus === 'pending_sent' && (
+                      <span style={{
+                        padding: '8px 12px',
+                        background: 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '6px',
+                        color: colors.textMuted,
+                        fontSize: '11px',
+                      }}>
+                        Pending
+                      </span>
+                    )}
+                    {friendStatus === 'friends' && (
+                      <span style={{
+                        fontSize: '11px',
+                        color: colors.gold,
+                        background: 'rgba(212, 175, 55, 0.1)',
+                        padding: '4px 8px',
+                        borderRadius: '8px',
+                      }}>
+                        {person.interestScore} match{person.interestScore !== 1 ? 'es' : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
-              ))
+              )})
             ) : (
               <div style={{ 
                 margin: '0 20px', 
@@ -1331,6 +1492,140 @@ export default function ForgeCrew() {
                         {interest.icon} {interest.name}
                       </span>
                     ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {/* Pending Friend Requests */}
+            {pendingRequests.length > 0 && (
+              <div style={{ padding: '0 20px', marginBottom: '24px' }}>
+                <h3 style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: colors.gold,
+                  marginBottom: '12px',
+                }}>
+                  Friend Requests ({pendingRequests.length})
+                </h3>
+                {pendingRequests.map(request => {
+                  const requester = nearbyUsers.find(u => u.id === request.requester_id);
+                  return (
+                    <div key={request.id} style={{
+                      padding: '12px 16px',
+                      background: 'rgba(45, 74, 62, 0.15)',
+                      border: '1px solid rgba(45, 74, 62, 0.3)',
+                      borderRadius: '8px',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accentLight} 100%)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: colors.text,
+                        }}>
+                          {requester?.name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <span style={{ color: colors.text, fontSize: '14px' }}>
+                          {requester?.name || 'Someone'} wants to connect
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => acceptFriendRequest(request.requester_id)}
+                          style={{
+                            padding: '6px 12px',
+                            background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: colors.bg,
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            fontFamily: '"Cormorant Garamond", Georgia, serif',
+                          }}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => declineFriendRequest(request.requester_id)}
+                          style={{
+                            padding: '6px 12px',
+                            background: 'transparent',
+                            border: `1px solid ${colors.border}`,
+                            borderRadius: '4px',
+                            color: colors.textMuted,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            fontFamily: '"Cormorant Garamond", Georgia, serif',
+                          }}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            
+            {/* Friends List */}
+            {friends.length > 0 && (
+              <div style={{ padding: '0 20px', marginBottom: '24px' }}>
+                <h3 style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  letterSpacing: '2px',
+                  textTransform: 'uppercase',
+                  color: colors.gold,
+                  marginBottom: '12px',
+                }}>
+                  Friends ({friends.length})
+                </h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {friends.map(friendId => {
+                    const friend = nearbyUsers.find(u => u.id === friendId);
+                    return (
+                      <div key={friendId} style={{
+                        padding: '8px 12px',
+                        background: 'rgba(212, 175, 55, 0.1)',
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: colors.bg,
+                        }}>
+                          {friend?.name?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <span style={{ color: colors.text, fontSize: '13px' }}>
+                          {friend?.name || 'Friend'}
+                        </span>
+                      </div>
+                    );
                   })}
                 </div>
               </div>
