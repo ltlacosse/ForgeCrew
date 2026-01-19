@@ -1499,8 +1499,29 @@ export default function ForgeCrew() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                style={{ marginBottom: '24px' }}
+                style={{ marginBottom: '16px' }}
               />
+              
+              {authMode === 'login' && (
+                <div style={{ textAlign: 'right', marginBottom: '24px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentScreen('forgot-password')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.textMuted,
+                      cursor: 'pointer',
+                      fontFamily: '"Cormorant Garamond", Georgia, serif',
+                      fontSize: '13px',
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+              
+              {authMode === 'signup' && <div style={{ marginBottom: '24px' }} />}
               
               {authError && (
                 <p style={{
@@ -1569,6 +1590,98 @@ export default function ForgeCrew() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // FORGOT PASSWORD SCREEN
+  if (currentScreen === 'forgot-password') {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          <div style={{ padding: '40px 24px', minHeight: '100vh' }}>
+            <button 
+              onClick={() => setCurrentScreen('auth')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: colors.gold,
+                fontSize: '14px',
+                cursor: 'pointer',
+                marginBottom: '32px',
+                fontFamily: '"Cormorant Garamond", Georgia, serif',
+              }}
+            >
+              ← Back to Sign In
+            </button>
+            
+            <h2 style={{
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontSize: '28px',
+              fontWeight: '600',
+              marginBottom: '12px',
+              color: '#f4e8d9',
+            }}>
+              Reset Password
+            </h2>
+            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '32px' }}>
+              Enter your email and we'll send you a link to reset your password.
+            </p>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setAuthLoading(true);
+              setAuthError('');
+              
+              try {
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/reset-password`,
+                });
+                
+                if (error) throw error;
+                
+                alert('Check your email for the password reset link!');
+                setCurrentScreen('auth');
+              } catch (error) {
+                setAuthError(error.message);
+              } finally {
+                setAuthLoading(false);
+              }
+            }}>
+              <input
+                className="input"
+                type="email"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                style={{ marginBottom: '24px' }}
+              />
+              
+              {authError && (
+                <p style={{
+                  color: '#e74c3c',
+                  fontSize: '14px',
+                  marginBottom: '16px',
+                  padding: '12px',
+                  background: 'rgba(231, 76, 60, 0.1)',
+                  borderRadius: '6px',
+                }}>
+                  {authError}
+                </p>
+              )}
+              
+              <button 
+                className="btn-primary"
+                type="submit"
+                style={{ width: '100%', opacity: authLoading ? 0.7 : 1 }}
+                disabled={authLoading}
+              >
+                {authLoading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </form>
           </div>
         </div>
       </div>
