@@ -44,6 +44,20 @@ const calculateMatchScore = (userInterests, otherInterests) => {
   return matches.length;
 };
 
+// Helper function to calculate distance between two coordinates (Haversine formula)
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 3959; // Earth's radius in miles
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return Math.round(R * c);
+};
+
 // Helper function to check location match (simple city matching for now)
 const locationsMatch = (loc1, loc2) => {
   if (!loc1 || !loc2) return false;
@@ -213,6 +227,11 @@ export default function ForgeCrew() {
   const [onboardingName, setOnboardingName] = useState('');
   const [onboardingLocation, setOnboardingLocation] = useState('');
   const [selectedInterests, setSelectedInterests] = useState([]);
+  const [userLatitude, setUserLatitude] = useState(null);
+  const [userLongitude, setUserLongitude] = useState(null);
+  const [radiusMiles, setRadiusMiles] = useState(25);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState('');
   
   // App state
   const [joinedCrews, setJoinedCrews] = useState([]);
@@ -293,9 +312,25 @@ export default function ForgeCrew() {
       if (error) throw error;
       
       if (allUsers && allUsers.length > 0) {
+        const userRadius = currentProfile.radius_miles || 25;
+        
         // Score and sort users by match quality
         const scoredUsers = allUsers.map(otherUser => {
-          const locationMatch = locationsMatch(currentProfile.location, otherUser.location);
+          // Calculate distance if both users have GPS coordinates
+          let distance = null;
+          let withinRadius = false;
+          
+          if (currentProfile.latitude && currentProfile.longitude && 
+              otherUser.latitude && otherUser.longitude) {
+            distance = calculateDistance(
+              currentProfile.latitude, currentProfile.longitude,
+              otherUser.latitude, otherUser.longitude
+            );
+            withinRadius = distance !== null && distance <= userRadius;
+          }
+          
+          // Fall back to city name matching if no GPS
+          const locationMatch = withinRadius || locationsMatch(currentProfile.location, otherUser.location);
           const interestScore = calculateMatchScore(currentProfile.interests, otherUser.interests);
           const sharedInterests = currentProfile.interests?.filter(i => 
             otherUser.interests?.includes(i)
@@ -304,6 +339,8 @@ export default function ForgeCrew() {
           return {
             ...otherUser,
             locationMatch,
+            distance,
+            withinRadius,
             interestScore,
             sharedInterests,
             totalScore: (locationMatch ? 10 : 0) + interestScore
@@ -334,6 +371,7 @@ export default function ForgeCrew() {
   const generateSuggestedCrews = (currentProfile, allUsers) => {
     if (!currentProfile?.interests) return;
     
+    const userRadius = currentProfile.radius_miles || 25;
     const suggestions = [];
     
     // For each of the user's interests, count how many nearby people share it
@@ -341,11 +379,18 @@ export default function ForgeCrew() {
       const interest = interestOptions.find(i => i.id === interestId);
       if (!interest) return;
       
-      // Find users in same location with this interest
-      const matchingUsers = allUsers.filter(u => 
-        locationsMatch(currentProfile.location, u.location) && 
-        u.interests?.includes(interestId)
-      );
+      // Find users within radius with this interest
+      const matchingUsers = allUsers.filter(u => {
+        // Check if within radius using GPS or city match
+        let isNearby = false;
+        if (currentProfile.latitude && currentProfile.longitude && u.latitude && u.longitude) {
+          const dist = calculateDistance(currentProfile.latitude, currentProfile.longitude, u.latitude, u.longitude);
+          isNearby = dist !== null && dist <= userRadius;
+        } else {
+          isNearby = locationsMatch(currentProfile.location, u.location);
+        }
+        return isNearby && u.interests?.includes(interestId);
+      });
       
       // Get city name for the crew suggestion
       const city = currentProfile.location?.split(',')[0]?.trim() || 'Local';
@@ -561,6 +606,9 @@ export default function ForgeCrew() {
           name: onboardingName,
           location: onboardingLocation,
           interests: selectedInterests,
+          latitude: userLatitude,
+          longitude: userLongitude,
+          radius_miles: radiusMiles,
           updated_at: new Date().toISOString(),
         });
 
@@ -583,6 +631,9 @@ export default function ForgeCrew() {
         name: onboardingName,
         location: onboardingLocation,
         interests: selectedInterests,
+        latitude: userLatitude,
+        longitude: userLongitude,
+        radius_miles: radiusMiles,
       });
       
       setCurrentScreen('home');
@@ -590,6 +641,51 @@ export default function ForgeCrew() {
       console.error('Error saving profile:', error);
       alert('Error saving profile. Please try again.');
     }
+  };
+
+  // Get user's GPS location
+  const getUserLocation = () => {
+    setGettingLocation(true);
+    setLocationError('');
+    
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      setGettingLocation(false);
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        setUserLatitude(lat);
+        setUserLongitude(lon);
+        
+        // Try to get city name from coordinates (reverse geocoding)
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`
+          );
+          const data = await response.json();
+          const city = data.address?.city || data.address?.town || data.address?.village || '';
+          const state = data.address?.state || '';
+          if (city && state) {
+            setOnboardingLocation(`${city}, ${state}`);
+          } else if (city) {
+            setOnboardingLocation(city);
+          }
+        } catch (e) {
+          console.log('Reverse geocoding failed:', e);
+        }
+        
+        setGettingLocation(false);
+      },
+      (error) => {
+        setLocationError('Unable to get your location. Please enter it manually.');
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const toggleInterest = (id) => {
@@ -889,9 +985,52 @@ export default function ForgeCrew() {
             }}>
               Where are you located?
             </h2>
-            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '32px' }}>
+            <p style={{ fontSize: '15px', color: colors.textMuted, marginBottom: '24px' }}>
               We'll find crews and events near you.
             </p>
+            
+            {/* GPS Location Button */}
+            <button
+              onClick={getUserLocation}
+              disabled={gettingLocation}
+              style={{
+                width: '100%',
+                padding: '16px',
+                marginBottom: '16px',
+                background: userLatitude ? 'rgba(45, 74, 62, 0.3)' : 'rgba(45, 74, 62, 0.15)',
+                border: userLatitude ? '1px solid rgba(45, 74, 62, 0.5)' : '1px solid rgba(45, 74, 62, 0.3)',
+                borderRadius: '8px',
+                color: colors.text,
+                fontSize: '15px',
+                cursor: gettingLocation ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                fontFamily: '"Cormorant Garamond", Georgia, serif',
+              }}
+            >
+              <span style={{ fontSize: '20px' }}>{userLatitude ? '✓' : '📍'}</span>
+              {gettingLocation ? 'Getting location...' : userLatitude ? 'Location detected!' : 'Use my current location'}
+            </button>
+            
+            {locationError && (
+              <p style={{ color: '#e74c3c', fontSize: '13px', marginBottom: '12px' }}>{locationError}</p>
+            )}
+            
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '12px', 
+              marginBottom: '16px',
+              color: colors.textMuted,
+              fontSize: '13px',
+            }}>
+              <div style={{ flex: 1, height: '1px', background: colors.border }} />
+              <span>or enter manually</span>
+              <div style={{ flex: 1, height: '1px', background: colors.border }} />
+            </div>
+            
             <input
               className="input"
               type="text"
@@ -900,11 +1039,45 @@ export default function ForgeCrew() {
               onChange={(e) => setOnboardingLocation(e.target.value)}
               style={{ marginBottom: '24px' }}
             />
+            
+            {/* Radius Selector */}
+            <div style={{ marginBottom: '24px' }}>
+              <p style={{ fontSize: '14px', color: colors.textMuted, marginBottom: '12px' }}>
+                Search radius: <span style={{ color: colors.gold, fontWeight: '600' }}>{radiusMiles} miles</span>
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {[10, 25, 50, 100].map(miles => (
+                  <button
+                    key={miles}
+                    onClick={() => setRadiusMiles(miles)}
+                    style={{
+                      flex: 1,
+                      padding: '12px 8px',
+                      background: radiusMiles === miles 
+                        ? `linear-gradient(135deg, ${colors.gold} 0%, ${colors.goldDark} 100%)`
+                        : 'rgba(255,255,255,0.03)',
+                      border: radiusMiles === miles 
+                        ? 'none'
+                        : `1px solid ${colors.border}`,
+                      borderRadius: '6px',
+                      color: radiusMiles === miles ? colors.bg : colors.textMuted,
+                      fontSize: '14px',
+                      fontWeight: radiusMiles === miles ? '600' : '400',
+                      cursor: 'pointer',
+                      fontFamily: '"Cormorant Garamond", Georgia, serif',
+                    }}
+                  >
+                    {miles} mi
+                  </button>
+                ))}
+              </div>
+            </div>
+            
             <button 
               className="btn-primary"
-              style={{ width: '100%', opacity: onboardingLocation ? 1 : 0.5 }}
-              onClick={() => onboardingLocation && setCurrentScreen('onboarding-interests')}
-              disabled={!onboardingLocation}
+              style={{ width: '100%', opacity: (onboardingLocation || userLatitude) ? 1 : 0.5 }}
+              onClick={() => (onboardingLocation || userLatitude) && setCurrentScreen('onboarding-interests')}
+              disabled={!onboardingLocation && !userLatitude}
             >
               Continue
             </button>
@@ -1260,7 +1433,7 @@ export default function ForgeCrew() {
                             padding: '2px 8px',
                             borderRadius: '10px',
                           }}>
-                            📍 {person.location}
+                            📍 {person.distance ? `${person.distance} mi away` : person.location}
                           </span>
                         )}
                         {person.sharedInterests?.slice(0, 2).map(interestId => {
