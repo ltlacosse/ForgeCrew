@@ -1,8 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
 * {
   box-sizing: border-box;
@@ -12,139 +8,75 @@
 
 body {
   font-family: 'Cormorant Garamond', Georgia, serif;
-  background: #0d0c0a;
-  color: #f0ebe3;
-  min-height: 100vh;
-  font-size: 16px;
-  letter-spacing: 0.01em;
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
   background: #141211;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #d4af37;
-  border-radius: 3px;
-}
-
-/* Noise overlay */
-.noise-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  opacity: 0.025;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Gradient text */
-.gradient-text {
-  background: linear-gradient(180deg, #f5f0e6 0%, #d4af37 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #f0ebe3;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Button styles */
 .btn-primary {
   background: linear-gradient(135deg, #d4af37 0%, #a68a2a 100%);
-  border: none;
-  padding: 18px 48px;
-  font-size: 13px;
+  color: #1a1512;
   font-weight: 600;
-  letter-spacing: 3px;
+  padding: 16px 32px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  color: #141211;
-  border-radius: 4px;
   cursor: pointer;
+  transition: all 0.2s ease;
   font-family: 'Cormorant Garamond', Georgia, serif;
-  box-shadow: 0 4px 24px rgba(212, 175, 55, 0.35);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.2);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 32px rgba(212, 175, 55, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .btn-secondary {
   background: transparent;
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  padding: 16px 40px;
-  font-size: 12px;
-  font-weight: 600;
+  color: #a69f93;
+  font-weight: 500;
+  padding: 14px 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  font-size: 14px;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: #e5c76b;
-  border-radius: 4px;
   cursor: pointer;
+  transition: all 0.2s ease;
   font-family: 'Cormorant Garamond', Georgia, serif;
-  transition: all 0.3s ease;
 }
 
 .btn-secondary:hover {
-  border-color: rgba(212, 175, 55, 0.6);
-  background: rgba(212, 175, 55, 0.08);
-}
-
-/* Accent button - Green */
-.btn-accent {
-  background: linear-gradient(135deg, #2d4a3e 0%, #1f332b 100%);
-  border: 1px solid rgba(45, 74, 62, 0.5);
-  padding: 16px 40px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: #a8c5b8;
-  border-radius: 4px;
-  cursor: pointer;
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  transition: all 0.3s ease;
-}
-
-.btn-accent:hover {
-  background: linear-gradient(135deg, #3d6352 0%, #2d4a3e 100%);
-}
-
-/* Card styles */
-.card {
-  background: linear-gradient(145deg, rgba(35, 32, 28, 0.9) 0%, rgba(25, 23, 20, 0.95) 100%);
-  border: 1px solid rgba(212, 175, 55, 0.1);
-  border-radius: 12px;
-  transition: all 0.25s ease;
-}
-
-.card:hover {
-  border-color: rgba(212, 175, 55, 0.25);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-color: rgba(212, 175, 55, 0.5);
+  color: #d4af37;
 }
 
 /* Input styles */
 .input {
   width: 100%;
-  padding: 16px 20px;
-  font-size: 16px;
+  padding: 16px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(212, 175, 55, 0.15);
-  border-radius: 6px;
+  border: 1px solid rgba(212, 175, 55, 0.12);
+  border-radius: 8px;
   color: #f0ebe3;
+  font-size: 16px;
   font-family: 'Cormorant Garamond', Georgia, serif;
-  outline: none;
-  transition: border-color 0.3s ease, background 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .input:focus {
-  border-color: rgba(212, 175, 55, 0.45);
+  outline: none;
+  border-color: rgba(212, 175, 55, 0.4);
   background: rgba(255, 255, 255, 0.05);
 }
 
@@ -152,18 +84,33 @@ body {
   color: #6b655c;
 }
 
-/* Badge styles */
-.badge-verified {
-  background: linear-gradient(135deg, #2d4a3e 0%, #1f332b 100%);
-  color: #a8c5b8;
+/* Card styles */
+.card {
+  background: rgba(35, 32, 28, 0.9);
+  border: 1px solid rgba(212, 175, 55, 0.12);
+  border-radius: 12px;
+  transition: all 0.2s ease;
 }
 
-.badge-featured {
-  background: linear-gradient(135deg, #d4af37 0%, #a68a2a 100%);
-  color: #141211;
+.card:hover {
+  border-color: rgba(212, 175, 55, 0.25);
+  transform: translateY(-2px);
 }
 
-.badge-premium {
-  background: linear-gradient(135deg, #722f37 0%, #5a252c 100%);
-  color: #e8c4c8;
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a1512;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.5);
 }
