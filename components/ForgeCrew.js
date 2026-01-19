@@ -255,6 +255,17 @@ export default function ForgeCrew() {
   const [newCrewCategory, setNewCrewCategory] = useState('');
   const [selectedCrew, setSelectedCrew] = useState(null);
   
+  // Events state
+  const [events, setEvents] = useState([]);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventDescription, setNewEventDescription] = useState('');
+  const [newEventLocation, setNewEventLocation] = useState('');
+  const [newEventDate, setNewEventDate] = useState('');
+  const [newEventTime, setNewEventTime] = useState('');
+  const [newEventCrewId, setNewEventCrewId] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  
   // Friends state
   const [friends, setFriends] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -305,6 +316,8 @@ export default function ForgeCrew() {
         fetchFriends(userId);
         // Fetch crews
         fetchCrews(userId, data);
+        // Fetch events
+        fetchEvents(userId);
       } else {
         // No profile yet, need onboarding
         setCurrentScreen('onboarding-name');
@@ -679,6 +692,165 @@ export default function ForgeCrew() {
       fetchCrews(user.id, profile);
     } catch (error) {
       console.error('Error leaving crew:', error);
+    }
+  };
+
+  // Fetch events for user's crews
+  const fetchEvents = async (userId) => {
+    try {
+      // Get user's crew memberships
+      const { data: memberships } = await supabase
+        .from('crew_members')
+        .select('crew_id')
+        .eq('user_id', userId);
+      
+      if (!memberships || memberships.length === 0) {
+        setEvents([]);
+        return;
+      }
+      
+      const crewIds = memberships.map(m => m.crew_id);
+      
+      // Fetch events for those crews
+      const { data: eventsData, error } = await supabase
+        .from('events')
+        .select('*')
+        .in('crew_id', crewIds)
+        .gte('event_date', new Date().toISOString())
+        .order('event_date', { ascending: true });
+      
+      if (error) throw error;
+      
+      // Add attendee count and user's RSVP status
+      if (eventsData) {
+        const eventsWithData = await Promise.all(eventsData.map(async (event) => {
+          const { count } = await supabase
+            .from('event_attendees')
+            .select('*', { count: 'exact', head: true })
+            .eq('event_id', event.id);
+          
+          const { data: userRsvp } = await supabase
+            .from('event_attendees')
+            .select('status')
+            .eq('event_id', event.id)
+            .eq('user_id', userId)
+            .single();
+          
+          // Get crew name
+          const crew = myCrews.find(c => c.id === event.crew_id) || realCrews.find(c => c.id === event.crew_id);
+          
+          return {
+            ...event,
+            attendeeCount: count || 0,
+            userRsvp: userRsvp?.status || null,
+            crewName: crew?.name || 'Unknown Crew'
+          };
+        }));
+        
+        setEvents(eventsWithData);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
+
+  // Create a new event
+  const createEvent = async () => {
+    if (!user || !newEventTitle || !newEventDate || !newEventTime || !newEventCrewId) return;
+    
+    try {
+      const eventDateTime = new Date(`${newEventDate}T${newEventTime}`);
+      
+      const { data: event, error } = await supabase
+        .from('events')
+        .insert({
+          crew_id: newEventCrewId,
+          creator_id: user.id,
+          title: newEventTitle,
+          description: newEventDescription,
+          location: newEventLocation,
+          event_date: eventDateTime.toISOString(),
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Auto-RSVP creator as going
+      await supabase
+        .from('event_attendees')
+        .insert({
+          event_id: event.id,
+          user_id: user.id,
+          status: 'going'
+        });
+      
+      // Reset form and refresh
+      setNewEventTitle('');
+      setNewEventDescription('');
+      setNewEventLocation('');
+      setNewEventDate('');
+      setNewEventTime('');
+      setNewEventCrewId(null);
+      setShowCreateEvent(false);
+      fetchEvents(user.id);
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert('Error creating event. Please try again.');
+    }
+  };
+
+  // RSVP to event
+  const rsvpToEvent = async (eventId, status) => {
+    if (!user) return;
+    
+    try {
+      // Check if already RSVPed
+      const { data: existing } = await supabase
+        .from('event_attendees')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (existing) {
+        // Update existing RSVP
+        await supabase
+          .from('event_attendees')
+          .update({ status })
+          .eq('event_id', eventId)
+          .eq('user_id', user.id);
+      } else {
+        // Create new RSVP
+        await supabase
+          .from('event_attendees')
+          .insert({
+            event_id: eventId,
+            user_id: user.id,
+            status
+          });
+      }
+      
+      fetchEvents(user.id);
+    } catch (error) {
+      console.error('Error RSVPing to event:', error);
+    }
+  };
+
+  // Cancel RSVP
+  const cancelRsvp = async (eventId) => {
+    if (!user) return;
+    
+    try {
+      await supabase
+        .from('event_attendees')
+        .delete()
+        .eq('event_id', eventId)
+        .eq('user_id', user.id);
+      
+      fetchEvents(user.id);
+    } catch (error) {
+      console.error('Error canceling RSVP:', error);
     }
   };
 
@@ -1680,6 +1852,133 @@ export default function ForgeCrew() {
               </>
             )}
             
+            {/* Upcoming Events Section */}
+            {events.length > 0 && (
+              <>
+                <div style={{ padding: '0 20px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      letterSpacing: '2px',
+                      textTransform: 'uppercase',
+                      color: colors.gold,
+                    }}>
+                      Upcoming Events
+                    </span>
+                    {myCrews.length > 0 && (
+                      <button
+                        onClick={() => setShowCreateEvent(true)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: colors.gold,
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          fontFamily: '"Cormorant Garamond", Georgia, serif',
+                        }}
+                      >
+                        + Create Event
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {events.slice(0, 3).map(event => {
+                  const eventDate = new Date(event.event_date);
+                  return (
+                    <div 
+                      key={event.id}
+                      className="card"
+                      onClick={() => setSelectedEvent(event)}
+                      style={{ margin: '0 20px 12px', padding: '16px', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', gap: '16px' }}>
+                        <div style={{
+                          width: '50px',
+                          textAlign: 'center',
+                          padding: '8px',
+                          background: 'rgba(212, 175, 55, 0.1)',
+                          borderRadius: '8px',
+                        }}>
+                          <div style={{ fontSize: '11px', color: colors.gold, textTransform: 'uppercase' }}>
+                            {eventDate.toLocaleDateString('en-US', { month: 'short' })}
+                          </div>
+                          <div style={{ fontSize: '24px', fontWeight: '700', color: colors.text }}>
+                            {eventDate.getDate()}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={{
+                            fontFamily: '"Playfair Display", Georgia, serif',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            color: '#f4e8d9',
+                            marginBottom: '4px',
+                          }}>
+                            {event.title}
+                          </h3>
+                          <p style={{ fontSize: '12px', color: colors.textMuted, marginBottom: '4px' }}>
+                            {event.crewName}
+                          </p>
+                          <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: colors.textMuted }}>
+                            <span>🕐 {eventDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>
+                            {event.location && <span>📍 {event.location}</span>}
+                          </div>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-end',
+                          gap: '4px',
+                        }}>
+                          <span style={{ fontSize: '12px', color: colors.textMuted }}>
+                            {event.attendeeCount} going
+                          </span>
+                          {event.userRsvp === 'going' && (
+                            <span style={{ 
+                              fontSize: '11px', 
+                              color: colors.gold,
+                              background: 'rgba(212, 175, 55, 0.15)',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                            }}>✓ Going</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            
+            {/* Create Event Button (if no events but has crews) */}
+            {events.length === 0 && myCrews.length > 0 && (
+              <div style={{ padding: '0 20px', marginBottom: '24px' }}>
+                <button
+                  onClick={() => setShowCreateEvent(true)}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: 'rgba(45, 74, 62, 0.15)',
+                    border: '1px solid rgba(45, 74, 62, 0.3)',
+                    borderRadius: '12px',
+                    color: colors.text,
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>📅</span>
+                  Create your first event
+                </button>
+              </div>
+            )}
+            
             {/* My Crews Section */}
             {myCrews.length > 0 && (
               <>
@@ -2131,6 +2430,255 @@ export default function ForgeCrew() {
                       }}
                     >
                       Leave Crew
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Create Event Modal */}
+          {showCreateEvent && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200,
+              padding: '20px',
+            }}>
+              <div style={{
+                background: colors.bgLight,
+                borderRadius: '16px',
+                padding: '24px',
+                width: '100%',
+                maxWidth: '360px',
+                border: `1px solid ${colors.border}`,
+                maxHeight: '90vh',
+                overflowY: 'auto',
+              }}>
+                <h2 style={{
+                  fontFamily: '"Playfair Display", Georgia, serif',
+                  fontSize: '24px',
+                  color: '#f4e8d9',
+                  marginBottom: '20px',
+                }}>
+                  Create Event
+                </h2>
+                
+                <select
+                  value={newEventCrewId || ''}
+                  onChange={(e) => setNewEventCrewId(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    color: newEventCrewId ? colors.text : colors.textDark,
+                    fontSize: '16px',
+                    fontFamily: '"Cormorant Garamond", Georgia, serif',
+                  }}
+                >
+                  <option value="">Select crew</option>
+                  {myCrews.map(crew => (
+                    <option key={crew.id} value={crew.id}>{crew.name}</option>
+                  ))}
+                </select>
+                
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Event title"
+                  value={newEventTitle}
+                  onChange={(e) => setNewEventTitle(e.target.value)}
+                  style={{ marginBottom: '12px' }}
+                />
+                
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                  <input
+                    className="input"
+                    type="date"
+                    value={newEventDate}
+                    onChange={(e) => setNewEventDate(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                  <input
+                    className="input"
+                    type="time"
+                    value={newEventTime}
+                    onChange={(e) => setNewEventTime(e.target.value)}
+                    style={{ flex: 1 }}
+                  />
+                </div>
+                
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Location (optional)"
+                  value={newEventLocation}
+                  onChange={(e) => setNewEventLocation(e.target.value)}
+                  style={{ marginBottom: '12px' }}
+                />
+                
+                <textarea
+                  className="input"
+                  placeholder="Description (optional)"
+                  value={newEventDescription}
+                  onChange={(e) => setNewEventDescription(e.target.value)}
+                  rows={3}
+                  style={{ marginBottom: '20px', resize: 'none' }}
+                />
+                
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => {
+                      setShowCreateEvent(false);
+                      setNewEventTitle('');
+                      setNewEventDescription('');
+                      setNewEventLocation('');
+                      setNewEventDate('');
+                      setNewEventTime('');
+                      setNewEventCrewId(null);
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={createEvent}
+                    disabled={!newEventTitle || !newEventDate || !newEventTime || !newEventCrewId}
+                    style={{ flex: 1, opacity: (!newEventTitle || !newEventDate || !newEventTime || !newEventCrewId) ? 0.5 : 1 }}
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Event Detail Modal */}
+          {selectedEvent && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 200,
+              padding: '20px',
+            }}>
+              <div style={{
+                background: colors.bgLight,
+                borderRadius: '16px',
+                padding: '24px',
+                width: '100%',
+                maxWidth: '360px',
+                border: `1px solid ${colors.border}`,
+              }}>
+                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                  <div style={{
+                    display: 'inline-block',
+                    padding: '12px 20px',
+                    background: 'rgba(212, 175, 55, 0.1)',
+                    borderRadius: '12px',
+                    marginBottom: '16px',
+                  }}>
+                    <div style={{ fontSize: '12px', color: colors.gold, textTransform: 'uppercase' }}>
+                      {new Date(selectedEvent.event_date).toLocaleDateString('en-US', { month: 'short' })}
+                    </div>
+                    <div style={{ fontSize: '32px', fontWeight: '700', color: colors.text }}>
+                      {new Date(selectedEvent.event_date).getDate()}
+                    </div>
+                  </div>
+                  <h2 style={{
+                    fontFamily: '"Playfair Display", Georgia, serif',
+                    fontSize: '24px',
+                    color: '#f4e8d9',
+                    marginBottom: '8px',
+                  }}>
+                    {selectedEvent.title}
+                  </h2>
+                  <p style={{ fontSize: '14px', color: colors.gold }}>
+                    {selectedEvent.crewName}
+                  </p>
+                </div>
+                
+                <div style={{ 
+                  padding: '16px', 
+                  background: 'rgba(255,255,255,0.03)', 
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', color: colors.textMuted, fontSize: '14px' }}>
+                    <span>🕐 {new Date(selectedEvent.event_date).toLocaleString('en-US', { 
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })}</span>
+                    {selectedEvent.location && <span>📍 {selectedEvent.location}</span>}
+                    <span>👥 {selectedEvent.attendeeCount} going</span>
+                  </div>
+                </div>
+                
+                {selectedEvent.description && (
+                  <p style={{ color: colors.textMuted, fontSize: '14px', marginBottom: '16px' }}>
+                    {selectedEvent.description}
+                  </p>
+                )}
+                
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setSelectedEvent(null)}
+                    style={{ flex: 1 }}
+                  >
+                    Close
+                  </button>
+                  {selectedEvent.userRsvp === 'going' ? (
+                    <button
+                      onClick={() => {
+                        cancelRsvp(selectedEvent.id);
+                        setSelectedEvent(null);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '14px 28px',
+                        background: 'rgba(231, 76, 60, 0.2)',
+                        border: '1px solid rgba(231, 76, 60, 0.4)',
+                        borderRadius: '6px',
+                        color: '#e74c3c',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        fontFamily: '"Cormorant Garamond", Georgia, serif',
+                      }}
+                    >
+                      Can't Go
+                    </button>
+                  ) : (
+                    <button
+                      className="btn-primary"
+                      onClick={() => {
+                        rsvpToEvent(selectedEvent.id, 'going');
+                        setSelectedEvent(null);
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      I'm Going!
                     </button>
                   )}
                 </div>
