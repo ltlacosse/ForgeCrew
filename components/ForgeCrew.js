@@ -3743,6 +3743,58 @@ export default function ForgeCrew() {
                 Sign Out
               </button>
             </div>
+            
+            {/* Delete Account */}
+            <div style={{ padding: '20px', marginTop: '24px', borderTop: `1px solid ${colors.border}` }}>
+              <button 
+                onClick={async () => {
+                  if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                    if (confirm('This will permanently delete all your data including your profile, crews, friends, and events. Continue?')) {
+                      try {
+                        // Delete user's data from all tables
+                        await supabase.from('event_attendees').delete().eq('user_id', user.id);
+                        await supabase.from('events').delete().eq('creator_id', user.id);
+                        await supabase.from('crew_members').delete().eq('user_id', user.id);
+                        await supabase.from('friends').delete().or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`);
+                        await supabase.from('blocks').delete().or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
+                        await supabase.from('reports').delete().eq('reporter_id', user.id);
+                        await supabase.from('profiles').delete().eq('id', user.id);
+                        
+                        // Delete avatar from storage
+                        await supabase.storage.from('avatars').remove([`${user.id}/avatar.jpg`, `${user.id}/avatar.png`, `${user.id}/avatar.jpeg`]);
+                        
+                        // Sign out
+                        await supabase.auth.signOut();
+                        
+                        alert('Your account has been deleted.');
+                        setUser(null);
+                        setProfile(null);
+                        setCurrentScreen('splash');
+                      } catch (error) {
+                        console.error('Error deleting account:', error);
+                        alert('Error deleting account. Please contact support.');
+                      }
+                    }
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: 'transparent',
+                  border: `1px solid rgba(231, 76, 60, 0.3)`,
+                  borderRadius: '6px',
+                  color: '#e74c3c',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontFamily: '"Cormorant Garamond", Georgia, serif',
+                }}
+              >
+                Delete Account
+              </button>
+              <p style={{ fontSize: '12px', color: colors.textDark, textAlign: 'center', marginTop: '8px' }}>
+                This will permanently delete all your data
+              </p>
+            </div>
           </div>
           
           <BottomNav active="profile" onNavigate={setCurrentScreen} pendingCount={pendingRequests.length} />
