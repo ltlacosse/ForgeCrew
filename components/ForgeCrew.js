@@ -1154,11 +1154,190 @@ export default function ForgeCrew() {
             
             <button 
               className="btn-secondary"
-              style={{ width: '100%', maxWidth: '280px' }}
+              style={{ width: '100%', maxWidth: '280px', marginBottom: '24px' }}
               onClick={() => { setAuthMode('login'); setCurrentScreen('auth'); }}
             >
               I Have an Account
             </button>
+            
+            <div style={{ display: 'flex', gap: '16px', fontSize: '12px' }}>
+              <button
+                onClick={() => setCurrentScreen('terms')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.textDark,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontFamily: '"Cormorant Garamond", Georgia, serif',
+                }}
+              >
+                Terms of Service
+              </button>
+              <button
+                onClick={() => setCurrentScreen('privacy')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.textDark,
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  fontFamily: '"Cormorant Garamond", Georgia, serif',
+                }}
+              >
+                Privacy Policy
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // TERMS OF SERVICE SCREEN
+  if (currentScreen === 'terms') {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          <div style={{ padding: '24px', minHeight: '100vh' }}>
+            <button 
+              onClick={() => setCurrentScreen('splash')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: colors.gold,
+                fontSize: '14px',
+                cursor: 'pointer',
+                marginBottom: '24px',
+                fontFamily: '"Cormorant Garamond", Georgia, serif',
+              }}
+            >
+              ← Back
+            </button>
+            
+            <h1 style={{
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontSize: '28px',
+              color: '#f4e8d9',
+              marginBottom: '24px',
+            }}>
+              Terms of Service
+            </h1>
+            
+            <div style={{ color: colors.textMuted, fontSize: '14px', lineHeight: '1.7' }}>
+              <p style={{ marginBottom: '16px' }}><strong style={{ color: colors.text }}>Last updated:</strong> January 2026</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>1. Acceptance of Terms</h3>
+              <p style={{ marginBottom: '16px' }}>By accessing or using ForgeCrew, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the service.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>2. Eligibility</h3>
+              <p style={{ marginBottom: '16px' }}>You must be at least 21 years old to use ForgeCrew. By using this service, you represent that you meet this age requirement.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>3. User Conduct</h3>
+              <p style={{ marginBottom: '8px' }}>You agree not to:</p>
+              <p style={{ marginBottom: '4px' }}>• Harass, bully, or intimidate other users</p>
+              <p style={{ marginBottom: '4px' }}>• Post false, misleading, or fraudulent information</p>
+              <p style={{ marginBottom: '4px' }}>• Use the service for illegal activities</p>
+              <p style={{ marginBottom: '4px' }}>• Impersonate others or create fake profiles</p>
+              <p style={{ marginBottom: '16px' }}>• Share other users' personal information without consent</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>4. Account Termination</h3>
+              <p style={{ marginBottom: '16px' }}>We reserve the right to suspend or terminate your account at any time for violations of these terms or for any other reason at our discretion.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>5. Content Ownership</h3>
+              <p style={{ marginBottom: '16px' }}>You retain ownership of content you post. By posting content, you grant ForgeCrew a license to use, display, and distribute that content within the service.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>6. Disclaimer</h3>
+              <p style={{ marginBottom: '16px' }}>ForgeCrew is provided "as is" without warranties of any kind. We do not guarantee the accuracy of user profiles or the safety of in-person meetups. Always exercise caution when meeting people from the internet.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>7. Limitation of Liability</h3>
+              <p style={{ marginBottom: '16px' }}>ForgeCrew shall not be liable for any damages arising from your use of the service, including but not limited to interactions with other users.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>8. Changes to Terms</h3>
+              <p style={{ marginBottom: '16px' }}>We may update these terms at any time. Continued use of the service constitutes acceptance of any changes.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>9. Contact</h3>
+              <p style={{ marginBottom: '40px' }}>Questions about these terms? Contact us at support@forgecrew.app</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // PRIVACY POLICY SCREEN
+  if (currentScreen === 'privacy') {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          <div style={{ padding: '24px', minHeight: '100vh' }}>
+            <button 
+              onClick={() => setCurrentScreen('splash')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: colors.gold,
+                fontSize: '14px',
+                cursor: 'pointer',
+                marginBottom: '24px',
+                fontFamily: '"Cormorant Garamond", Georgia, serif',
+              }}
+            >
+              ← Back
+            </button>
+            
+            <h1 style={{
+              fontFamily: '"Playfair Display", Georgia, serif',
+              fontSize: '28px',
+              color: '#f4e8d9',
+              marginBottom: '24px',
+            }}>
+              Privacy Policy
+            </h1>
+            
+            <div style={{ color: colors.textMuted, fontSize: '14px', lineHeight: '1.7' }}>
+              <p style={{ marginBottom: '16px' }}><strong style={{ color: colors.text }}>Last updated:</strong> January 2026</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>1. Information We Collect</h3>
+              <p style={{ marginBottom: '8px' }}>We collect information you provide directly:</p>
+              <p style={{ marginBottom: '4px' }}>• Account information (email, name)</p>
+              <p style={{ marginBottom: '4px' }}>• Profile information (photo, location, interests)</p>
+              <p style={{ marginBottom: '4px' }}>• Social media links (optional)</p>
+              <p style={{ marginBottom: '16px' }}>• Location data (with your permission)</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>2. How We Use Your Information</h3>
+              <p style={{ marginBottom: '8px' }}>We use your information to:</p>
+              <p style={{ marginBottom: '4px' }}>• Provide and improve the service</p>
+              <p style={{ marginBottom: '4px' }}>• Match you with nearby users who share your interests</p>
+              <p style={{ marginBottom: '4px' }}>• Send notifications about events and friend requests</p>
+              <p style={{ marginBottom: '16px' }}>• Ensure safety and prevent abuse</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>3. Information Sharing</h3>
+              <p style={{ marginBottom: '8px' }}>Your profile information is visible to other users, including:</p>
+              <p style={{ marginBottom: '4px' }}>• Name and profile photo</p>
+              <p style={{ marginBottom: '4px' }}>• General location (city/area)</p>
+              <p style={{ marginBottom: '4px' }}>• Interests and crew memberships</p>
+              <p style={{ marginBottom: '16px' }}>We do not sell your personal information to third parties.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>4. Location Data</h3>
+              <p style={{ marginBottom: '16px' }}>If you enable location services, we use your GPS coordinates to find nearby users and events. This data is used only for matching purposes and is not shared with other users (they see your city, not your exact location).</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>5. Data Security</h3>
+              <p style={{ marginBottom: '16px' }}>We use industry-standard security measures to protect your data, including encryption and secure servers. However, no method of transmission over the internet is 100% secure.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>6. Data Retention</h3>
+              <p style={{ marginBottom: '16px' }}>We retain your data for as long as your account is active. You can request deletion of your account and data at any time.</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>7. Your Rights</h3>
+              <p style={{ marginBottom: '8px' }}>You have the right to:</p>
+              <p style={{ marginBottom: '4px' }}>• Access your personal data</p>
+              <p style={{ marginBottom: '4px' }}>• Correct inaccurate data</p>
+              <p style={{ marginBottom: '4px' }}>• Delete your account and data</p>
+              <p style={{ marginBottom: '16px' }}>• Opt out of location tracking</p>
+              
+              <h3 style={{ color: colors.gold, fontSize: '16px', marginTop: '24px', marginBottom: '12px' }}>8. Contact</h3>
+              <p style={{ marginBottom: '40px' }}>Privacy questions? Contact us at privacy@forgecrew.app</p>
+            </div>
           </div>
         </div>
       </div>
